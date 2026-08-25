@@ -130,7 +130,7 @@ elif selected == "AI検索モード":
             st.write("上部の検索窓にキーワードを入力してください。")
             st.dataframe(df_all.head(20), use_container_width=True)
 
-# --- 5. データ追加（マルチバリエーション対応版）---
+# --- 5. データ追加（複数解答・可変フォーム対応版）---
 elif selected == "データ追加":
     st.title("➕ データ追加")
     st.caption(
@@ -138,11 +138,9 @@ elif selected == "データ追加":
     )
     st.write("---")
 
-    # セッション状態の初期化
     if "added_data" not in st.session_state:
         st.session_state["added_data"] = pd.DataFrame()
 
-    # タブによる追加形式の切り替え
     tab1, tab2, tab3 = st.tabs(
         ["👤 1. キャラデータ", "📝 2. 記述問題", "🔢 3. 並び替え問題"]
     )
@@ -176,39 +174,74 @@ elif selected == "データ追加":
                 )
                 st.success("キャラデータを一時保存しました！")
 
-    # --- TAB 2: 記述問題追加 ---
+    # --- TAB 2: 記述問題追加（複数回答対応） ---
     with tab2:
         st.subheader("記述式クイズ追加")
+
+        # 解答欄の個数選択（フォーム外に設置して即時リロード反映）
+        num_answers = st.selectbox(
+            "解答（正解）の項目数を選択",
+            options=[1, 2, 3, 4, 5],
+            index=0,
+            help="四皇をすべて答える問題など、複数解答がある場合は項目数を変更してください。",
+        )
+
         with st.form("descriptive_form", clear_on_submit=True):
             q_text = st.text_area(
-                "問題文", placeholder="例：ハイルディンの船の船員は何名か？"
+                "問題文",
+                placeholder="例：現在の四皇（新四皇）の名称をすべて答えろ。",
             )
-            a_text = st.text_input("答（正解）", placeholder="例：5名")
+
+            # 選択された個数分だけ解答入力欄を動的生成
+            ans_inputs = []
+            cols = st.columns(min(num_answers, 3))
+            for i in range(num_answers):
+                col_target = cols[i % 3]
+                with col_target:
+                    ans_val = st.text_input(
+                        f"正解 {i+1}",
+                        placeholder=f"例：正解{i+1}",
+                        key=f"ans_input_{i}",
+                    )
+                    ans_inputs.append(ans_val)
+
             exp_text = st.text_area(
                 "解説・関連情報",
-                placeholder="例：新巨兵海賊団の船員はハイルディン、ゲルズ、スタンセン、ロード、ゴールドバーグの5名。",
+                placeholder="例：ルフィ、バギー、シャンクス、ティーチの4名。",
             )
             genre = st.text_input(
-                "ジャンル/関連エピソード", placeholder="例：ドレスローザ編 / 麦わら大傘下"
+                "ジャンル/関連エピソード", placeholder="例：ワノ国編後 / 懸賞金"
             )
 
             if st.form_submit_button("記述問題を追加"):
-                if q_text and a_text:
+                valid_answers = [
+                    a.strip() for a in ans_inputs if a and a.strip()
+                ]
+                if q_text and valid_answers:
+                    # 複数回答はカンマ区切りまたは結合して1つの正解文字として管理（クイズ判定時に分解可能）
+                    combined_answer = "、".join(valid_answers)
                     new_item = {
                         "type": "記述",
                         "question": q_text,
-                        "answer": a_text,
+                        "answer": combined_answer,
+                        "answer_count": len(valid_answers),
                         "explanation": exp_text,
                         "genre": genre,
                     }
+                    # 正解1, 正解2... として個別列にも保持
+                    for idx, a_val in enumerate(ans_inputs):
+                        new_item[f"answer_{idx+1}"] = a_val
+
                     new_row = pd.DataFrame([new_item])
                     st.session_state["added_data"] = pd.concat(
                         [st.session_state["added_data"], new_row],
                         ignore_index=True,
                     )
-                    st.success("記述問題を一時保存しました！")
+                    st.success(
+                        f"記述問題（解答{len(valid_answers)}件）を一時保存しました！"
+                    )
                 else:
-                    st.error("問題文と答は必須項目です。")
+                    st.error("問題文と少なくとも1つの正解を入力してください。")
 
     # --- TAB 3: 並び替え問題追加 ---
     with tab3:
