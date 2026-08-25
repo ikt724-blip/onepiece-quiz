@@ -1,6 +1,7 @@
 import glob
 import io
 import os
+import random
 import re
 import pandas as pd
 import qrcode
@@ -78,15 +79,211 @@ if selected == "ホーム":
             f"👈 左側のメニューから機能を選択してください。（登録済データ: {len(df_all)} 件）"
         )
 
-# --- 2. テスト開始 ---
+# --- 2. テスト開始（完全修復＆出題ロジック実装版） ---
 elif selected == "テスト開始":
     st.subheader("📝 クイズテスト")
+
     if df_all.empty:
         st.warning(
             "出題できるデータ（character_master.xlsx または 問題集.xlsx）が空っぽです。"
         )
     else:
-        st.success(f"全 {len(df_all)} 問の中からランダムに出題可能です。")
+        # セッション状態の初期化
+        if "quiz_started" not in st.session_state:
+            st.session_state.quiz_started = False
+        if "current_q_idx" not in st.session_state:
+            st.session_state.current_q_idx = 0
+        if "quiz_list" not in st.session_state:
+            st.session_state.quiz_list = []
+        if "score" not in st.session_state:
+            st.session_state.score = 0
+        if "user_answers" not in st.session_state:
+            st.session_state.user_answers = []
+
+        # --- 開始設定画面 ---
+        if not st.session_state.quiz_started:
+            st.success(f"全 {len(df_all)} 問の中からランダムに出題可能です。")
+
+            col1, col2 = st.columns(2)
+            with col1:
+                num_q = st.number_input(
+                    "出題数を指定してください",
+                    min_value=1,
+                    max_value=min(len(df_all), 100),
+                    value=min(len(df_all), 10),
+                )
+            with col2:
+                q_type_filter = st.selectbox(
+                    "出題タイプ", ["すべて", "記述問題", "並び替え問題", "キャラマスター"]
+                )
+
+            if st.button("🚀 テストを開始する", use_container_width=True):
+                target_df = df_all.copy()
+                if q_type_filter == "記述問題" and "type" in target_df.columns:
+                    target_df = target_df[target_df["type"] == "記述"]
+                elif (
+                    q_type_filter == "並び替え問題" and "type" in target_df.columns
+                ):
+                    target_df = target_df[target_df["type"] == "並び替え"]
+                elif (
+                    q_type_filter == "キャラマスター"
+                    and "type" in target_df.columns
+                ):
+                    target_df = target_df[target_df["type"] == "キャラデータ"]
+
+                if target_df.empty:
+                    target_df = df_all.copy()
+
+                shuffled = target_df.sample(
+                    n=min(num_q, len(target_df))
+                ).reset_index(drop=True)
+                st.session_state.quiz_list = shuffled.to_dict("records")
+                st.session_state.current_q_idx = 0
+                st.session_state.score = 0
+                st.session_state.user_answers = []
+                st.session_state.quiz_started = True
+                st.rerun()
+
+        # --- クイズ実行中画面 ---
+        else:
+            total_q = len(st.session_state.quiz_list)
+            curr_idx = st.session_state.current_q_idx
+
+            # 終了判定
+            if curr_idx >= total_q:
+                st.balloons()
+                st.markdown(
+                    f"## 🎉 クイズ終了！\n### 結果: **{total_q}** 問中 **{st.session_state.score}** 問正解！"
+                )
+
+                # 履歴一覧表示
+                st.write("---")
+                st.subheader("結果振り返り")
+                res_df = pd.DataFrame(st.session_state.user_answers)
+                if not res_df.empty:
+                    st.dataframe(res_df, use_container_width=True)
+
+                if st.button("🔄 もう一度挑戦する"):
+                    st.session_state.quiz_started = False
+                    st.rerun()
+
+            else:
+                q = st.session_state.quiz_list[curr_idx]
+
+                # 進行状況プログレス
+                st.progress((curr_idx) / total_q)
+                st.markdown(f"### 第 {curr_idx + 1} 問 / 全 {total_q} 問")
+
+                # 問題文抽出
+                question_text = (
+                    q.get("question")
+                    or q.get("問題")
+                    or (f"「{q.get('name')}」の悪魔の実は何か？" if q.get("name") else "")
+                )
+                st.info(f"**【問題】**\n{question_text}")
+
+                # 画像表示判定
+                img_name = str(q.get("image", ""))
+                if img_name and img_name != "nan":
+                    imgPath = (
+                        img_name
+                        if os.path.exists(img_name)
+                        else os.path.join("images", img_name)
+                    )
+                    if os.path.exists(imgPath):
+                        st.image(imgPath, width=300)
+
+                # 並び替え選択肢表示
+                is_sort = (
+                    q.get("type") == "並び替え" or "option1" in q and pd.notna(q.get("option1"))
+                )
+                if is_sort:
+                    st.write("【選択肢】")
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        st.write(f"1. {q.get('option1', '')}")
+                        st.write(f"2. {q.get('option2', '')}")
+                    with c2:
+                        st.write(f"3. {q.get('option3', '')}")
+                        st.write(f"4. {q.get('option4', '')}")
+
+                # 正解データの特定
+                correct_ans = str(
+                    q.get("answer")
+                    or q.get("解答")
+                    or q.get("devil_fruit")
+                    or ""
+                ).strip()
+
+                # 回答フォーム
+                with st.form(f"quiz_form_{curr_idx}"):
+                    user_input = st.text_input(
+                        "解答を入力してください",
+                        placeholder="（並び替えは『2431』のように番号で入力）"
+                        if is_sort
+                        else "ここに解答を記入",
+                    )
+                    sub_col1, sub_col2 = st.columns([1, 1])
+                    with sub_col1:
+                        submitted = st.form_submit_button(
+                            "決定", use_container_width=True
+                        )
+                    with sub_col2:
+                        passed = st.form_submit_button(
+                            "パス（後回し）", use_container_width=True
+                        )
+
+                if submitted:
+                    u_clean = user_input.strip()
+
+                    # 複数回答・柔軟判定ロジック
+                    is_correct = False
+                    if u_clean:
+                        if correct_ans == u_clean:
+                            is_correct = True
+                        elif "、" in correct_ans or "," in correct_ans:
+                            # カンマ/読点区切りの複数回答判定
+                            targets = [
+                                t.strip()
+                                for t in re.split(r"[、,]", correct_ans)
+                                if t.strip()
+                            ]
+                            user_parts = [
+                                u.strip()
+                                for u in re.split(r"[、,,\s]", u_clean)
+                                if u.strip()
+                            ]
+                            if set(targets) == set(user_parts):
+                                is_correct = True
+
+                    if is_correct:
+                        st.success("⭕ 正解！")
+                        st.session_state.score += 1
+                    else:
+                        st.error(f"❌ 不正解... 正解は: **{correct_ans}**")
+
+                    exp = q.get("explanation") or q.get("解説") or ""
+                    if pd.notna(exp) and str(exp).strip():
+                        st.caption(f"💡 【解説】: {exp}")
+
+                    st.session_state.user_answers.append(
+                        {
+                            "問題": question_text,
+                            "あなたの解答": u_clean,
+                            "正解": correct_ans,
+                            "判定": "⭕ 正解" if is_correct else "❌ 不正解",
+                        }
+                    )
+                    st.session_state.current_q_idx += 1
+                    st.button("次の問題へ ➡")
+
+                elif passed:
+                    st.session_state.current_q_idx += 1
+                    st.rerun()
+
+                if st.button("中断する"):
+                    st.session_state.quiz_started = False
+                    st.rerun()
 
 # --- 3. 苦手克服 ---
 elif selected == "苦手克服":
@@ -130,7 +327,7 @@ elif selected == "AI検索モード":
             st.write("上部の検索窓にキーワードを入力してください。")
             st.dataframe(df_all.head(20), use_container_width=True)
 
-# --- 5. データ追加（複数解答・可変フォーム対応版）---
+# --- 5. データ追加 ---
 elif selected == "データ追加":
     st.title("➕ データ追加")
     st.caption(
@@ -174,11 +371,10 @@ elif selected == "データ追加":
                 )
                 st.success("キャラデータを一時保存しました！")
 
-    # --- TAB 2: 記述問題追加（複数回答対応） ---
+    # --- TAB 2: 記述問題追加 ---
     with tab2:
         st.subheader("記述式クイズ追加")
 
-        # 解答欄の個数選択（フォーム外に設置して即時リロード反映）
         num_answers = st.selectbox(
             "解答（正解）の項目数を選択",
             options=[1, 2, 3, 4, 5],
@@ -192,7 +388,6 @@ elif selected == "データ追加":
                 placeholder="例：現在の四皇（新四皇）の名称をすべて答えろ。",
             )
 
-            # 選択された個数分だけ解答入力欄を動的生成
             ans_inputs = []
             cols = st.columns(min(num_answers, 3))
             for i in range(num_answers):
@@ -218,7 +413,6 @@ elif selected == "データ追加":
                     a.strip() for a in ans_inputs if a and a.strip()
                 ]
                 if q_text and valid_answers:
-                    # 複数回答はカンマ区切りまたは結合して1つの正解文字として管理（クイズ判定時に分解可能）
                     combined_answer = "、".join(valid_answers)
                     new_item = {
                         "type": "記述",
@@ -228,7 +422,6 @@ elif selected == "データ追加":
                         "explanation": exp_text,
                         "genre": genre,
                     }
-                    # 正解1, 正解2... として個別列にも保持
                     for idx, a_val in enumerate(ans_inputs):
                         new_item[f"answer_{idx+1}"] = a_val
 
