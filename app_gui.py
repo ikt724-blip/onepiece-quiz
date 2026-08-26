@@ -103,7 +103,7 @@ def format_question_and_answer(q):
 
     # 3. 悪魔の実が存在する場合 ➡ 悪魔の実当て問題
     if devil_fruit and name:
-        return f"「{name}」が食べた悪魔の日の名称は？", devil_fruit
+        return f"「{name}」が食べた悪魔の実の名称は？", devil_fruit
 
     # 4. 所属が存在する場合 ➡ 所属当て問題
     if affiliation and name:
@@ -136,7 +136,7 @@ with st.sidebar:
             "🏆 本番模試（50問/60分）",
             "🔥 苦手克服",
             "🔍 AI検索モード",
-            "➕ データ追加",
+            "➕ データ追加・編集",
         ],
         icons=[
             "house",
@@ -528,12 +528,10 @@ elif selected == "🔍 AI検索モード":
             st.write("上部の検索窓にキーワードを入力してください。")
             st.dataframe(df_all.head(20), use_container_width=True)
 
-# --- 6. データ追加 ---
-elif selected == "➕ データ追加":
-    st.title("➕ データ追加")
-    st.caption(
-        "問題のタイプに合わせて専用フォームから登録・Excel出力ができます。"
-    )
+# --- 6. データ追加・編集モード ---
+elif selected == "➕ データ追加・編集":
+    st.title("➕ データ追加 & 登録問題一覧・編集")
+    st.caption("新しい問題の追加や、登録済みデータの直接編集・修正が行えます。")
     st.write("---")
 
     if "added_data" not in st.session_state:
@@ -569,16 +567,17 @@ elif selected == "➕ データ追加":
                 st.session_state["added_data"] = pd.concat(
                     [st.session_state["added_data"], new_row], ignore_index=True
                 )
-                st.success("キャラデータを一時保存しました！")
+                st.success(
+                    "キャラデータを一時追加しました！下の「問題一覧・編集」から確認・編集できます。"
+                )
 
     with tab2:
         st.subheader("記述式クイズ追加")
-
         num_answers = st.selectbox(
             "解答（正解）の項目数を選択",
             options=[1, 2, 3, 4, 5],
             index=0,
-            help="四皇をすべて答える問題など、複数解答がある場合は項目数を変更してください。",
+            help="複数解答がある場合は項目数を変更してください。",
         )
 
         with st.form("descriptive_form", clear_on_submit=True):
@@ -586,7 +585,6 @@ elif selected == "➕ データ追加":
                 "問題文",
                 placeholder="例：現在の四皇（新四皇）の名称をすべて答えろ。",
             )
-
             ans_inputs = []
             cols = st.columns(min(num_answers, 3))
             for i in range(num_answers):
@@ -629,9 +627,7 @@ elif selected == "➕ データ追加":
                         [st.session_state["added_data"], new_row],
                         ignore_index=True,
                     )
-                    st.success(
-                        f"記述問題（解答{len(valid_answers)}件）を一時保存しました！"
-                    )
+                    st.success("記述問題を一時追加しました！")
                 else:
                     st.error("問題文と少なくとも1つの正解を入力してください。")
 
@@ -642,7 +638,6 @@ elif selected == "➕ データ追加":
                 "問題文",
                 placeholder="例：次の出来事を発生した順に並び替えよ。",
             )
-
             col1, col2 = st.columns(2)
             with col1:
                 opt1 = st.text_input(
@@ -660,8 +655,7 @@ elif selected == "➕ データ追加":
                 )
 
             s_answer = st.text_input(
-                "正解の順序（番号で指定）",
-                placeholder="例：3214 （ローグタウン→ドラム王国→アラバスタ→空島）",
+                "正解の順序（番号で指定）", placeholder="例：3214"
             )
             s_exp = st.text_area("解説", placeholder="時系列の補足などを記入")
 
@@ -682,34 +676,48 @@ elif selected == "➕ データ追加":
                         [st.session_state["added_data"], new_row],
                         ignore_index=True,
                     )
-                    st.success("並び替え問題を一時保存しました！")
+                    st.success("並び替え問題を一時追加しました！")
                 else:
-                    st.error(
-                        "問題文、少なくとも選択肢1・2、および正解順序を入力してください。"
-                    )
+                    st.error("必要な項目を入力してください。")
 
-    if not st.session_state["added_data"].empty:
-        st.write("---")
-        st.subheader("📋 一時保存中の全データ一覧")
-        st.dataframe(st.session_state["added_data"], use_container_width=True)
+    st.write("---")
+    st.subheader("✏️ 登録問題一覧 & リアルタイム編集")
+
+    target_data = pd.concat(
+        [df_all, st.session_state["added_data"]], ignore_index=True
+    )
+
+    if target_data.empty:
+        st.info("現在表示・編集できるデータがありません。")
+    else:
+        st.caption(
+            "💡 セルを直接ダブルクリックして文章や正解を書き換えられます（行の追加・削除も可能）。"
+        )
+
+        edited_df = st.data_editor(
+            target_data,
+            num_rows="dynamic",
+            use_container_width=True,
+            key="master_data_editor",
+        )
 
         buffer = io.BytesIO()
         with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-            st.session_state["added_data"].to_excel(writer, index=False)
+            edited_df.to_excel(writer, index=False)
 
         col_dl, col_clr = st.columns([3, 1])
         with col_dl:
             st.download_button(
-                label="📥 追加データをExcelファイルとしてダウンロード (`added_quiz_data.xlsx`)",
+                label="📥 編集後の全データをExcelファイルとして保存 (`updated_quiz_data.xlsx`)",
                 data=buffer.getvalue(),
-                file_name="added_quiz_data.xlsx",
+                file_name="updated_quiz_data.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             )
         with col_clr:
-            if st.button("🗑️ 一時保存をクリア"):
+            if st.button("🔄 編集をリセット"):
                 st.session_state["added_data"] = pd.DataFrame()
                 st.rerun()
 
         st.caption(
-            "※ダウンロードした `added_quiz_data.xlsx` をGitHubにドラッグ＆ドロップすると本番データに反映されます。"
+            "※ダウンロードした `updated_quiz_data.xlsx` をGitHubにアップロード（上書きまたは追加）すると本番アプリに反映されます。"
         )
