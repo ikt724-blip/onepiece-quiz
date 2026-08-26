@@ -55,6 +55,55 @@ def check_answer(user_input, correct_ans):
     return False
 
 
+# キャラマスターデータから問題文と正解を動的に自動生成する関数
+def format_question_and_answer(q):
+    """
+    Excelの行データから適切な問題文と正解を抽出・生成する
+    """
+    raw_question = q.get("question") or q.get("問題")
+    name = str(q.get("name", "")).strip()
+    image = str(q.get("image", "")).strip()
+    devil_fruit = str(q.get("devil_fruit", "")).strip()
+    affiliation = str(
+        q.get("affiliation") or q.get("所属") or q.get("group") or ""
+    ).strip()
+
+    # 有効な文字列かチェックするヘルパー
+    def is_valid(val):
+        return bool(val) and val != "nan" and val != "None"
+
+    # 1. 通常の問題文が用意されている場合
+    if is_valid(raw_question):
+        ans = str(
+            q.get("answer")
+            or q.get("解答")
+            or q.get("devil_fruit")
+            or q.get("name")
+            or ""
+        ).strip()
+        return str(raw_question), ans
+
+    # 2. 問題文がなく、画像とキャラ名がある場合 ➡ キャラ名当て問題
+    if is_valid(image) and is_valid(name):
+        return "このキャラクターの名前は？", name
+
+    # 3. 悪魔の実データがある場合 ➡ 悪魔の実当て問題
+    if is_valid(devil_fruit) and is_valid(name):
+        return f"「{name}」が食べた悪魔の日の名称は？", devil_fruit
+
+    # 4. 所属データがある場合 ➡ 所属当て問題
+    if is_valid(affiliation) and is_valid(name):
+        return f"「{name}」の主な所属（組織・海賊団など）は？", affiliation
+
+    # 5. キャラ名のみ存在する場合
+    if is_valid(name):
+        return f"「{name}」の異名（通り名）または役職は？", str(
+            q.get("nickname", "") or q.get("異名", "")
+        ).strip()
+
+    return "問題文の取得に失敗しました", ""
+
+
 # --- ページ基本設定 ---
 st.set_page_config(
     page_title="ONE PIECE ナレッジキング対策", page_icon="🏴‍☠️", layout="wide"
@@ -192,11 +241,8 @@ elif selected == "📖 練習モード":
                 st.progress((curr_idx) / total_q)
                 st.markdown(f"### 第 {curr_idx + 1} 問 / 全 {total_q} 問")
 
-                question_text = (
-                    q.get("question")
-                    or q.get("問題")
-                    or (f"「{q.get('name')}」の悪魔の日は何か？" if q.get("name") else "")
-                )
+                # 動的問題生成処理
+                question_text, correct_ans = format_question_and_answer(q)
                 st.info(f"**【問題】**\n{question_text}")
 
                 img_name = str(q.get("image", ""))
@@ -223,13 +269,6 @@ elif selected == "📖 練習モード":
                     with c2:
                         st.write(f"3. {q.get('option3', '')}")
                         st.write(f"4. {q.get('option4', '')}")
-
-                correct_ans = str(
-                    q.get("answer")
-                    or q.get("解答")
-                    or q.get("devil_fruit")
-                    or ""
-                ).strip()
 
                 with st.form(f"practice_form_{curr_idx}"):
                     user_input = st.text_input(
@@ -317,14 +356,11 @@ elif selected == "🏆 本番模試（50問/60分）":
                 st.rerun()
 
         else:
-            # 経過時間・残り時間計算
             elapsed_time = int(time.time() - st.session_state.exam_start_time)
-            total_time_limit = 60 * 60  # 60分
+            total_time_limit = 60 * 60
             remaining_time = max(0, total_time_limit - elapsed_time)
-
             mins, secs = divmod(remaining_time, 60)
 
-            # タイマー表示（上部固定風）
             col_t1, col_t2 = st.columns([2, 1])
             with col_t1:
                 st.progress(
@@ -340,31 +376,19 @@ elif selected == "🏆 本番模試（50問/60分）":
             total_q = len(st.session_state.e_quiz_list)
             curr_idx = st.session_state.e_curr_idx
 
-            # タイムアップまたは全問終了時
             if remaining_time <= 0 or curr_idx >= total_q:
                 st.balloons()
                 st.markdown("## 🏁 模試終了！ 採点結果")
 
-                # 採点ロジック
                 score = 0
                 summary_data = []
                 for idx, q_item in enumerate(st.session_state.e_quiz_list):
+                    q_txt, c_ans = format_question_and_answer(q_item)
                     u_ans = st.session_state.e_user_answers.get(idx, "")
-                    c_ans = str(
-                        q_item.get("answer")
-                        or q_item.get("解答")
-                        or q_item.get("devil_fruit")
-                        or ""
-                    ).strip()
                     is_c = check_answer(u_ans, c_ans)
                     if is_c:
                         score += 1
 
-                    q_txt = (
-                        q_item.get("question")
-                        or q_item.get("問題")
-                        or q_item.get("name")
-                    )
                     summary_data.append(
                         {
                             "問": idx + 1,
@@ -390,11 +414,8 @@ elif selected == "🏆 本番模試（50問/60分）":
                 q = st.session_state.e_quiz_list[curr_idx]
                 st.markdown(f"### 第 {curr_idx + 1} 問 / 全 {total_q} 問")
 
-                question_text = (
-                    q.get("question")
-                    or q.get("問題")
-                    or (f"「{q.get('name')}」の悪魔の日は何か？" if q.get("name") else "")
-                )
+                # 動的問題生成処理
+                question_text, correct_ans = format_question_and_answer(q)
                 st.info(f"**【問題】**\n{question_text}")
 
                 img_name = str(q.get("image", ""))
@@ -671,7 +692,7 @@ elif selected == "➕ データ追加":
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             )
         with col_clr:
-            if st.button("🗑️ 一时保存をクリア"):
+            if st.button("🗑️ 一時保存をクリア"):
                 st.session_state["added_data"] = pd.DataFrame()
                 st.rerun()
 
