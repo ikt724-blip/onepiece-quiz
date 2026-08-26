@@ -131,9 +131,9 @@ def format_question_and_answer(q):
     return "このキャラクターの名前は？", name
 
 
-# --- 背景画像グリッド生成ヘルパー ---
-def set_background_grid():
-    """フォルダ内の画像をランダム抽出して背景グリッドを生成・注入する"""
+# --- 右から左へ画像が連続で流れる背景アニメーション ---
+def set_infinite_scrolling_background():
+    """フォルダ内の画像をランダム抽出して背景で右から左へ常時流す"""
     img_paths = (
         glob.glob("images/*.png")
         + glob.glob("images/*.jpg")
@@ -144,71 +144,129 @@ def set_background_grid():
     if not img_paths:
         return
 
-    # ランダムに最大30枚選出
-    selected_imgs = random.sample(img_paths, min(len(img_paths), 30))
+    # ランダムに20枚程度選出し、シームレスループ用に2セット連結
+    sample_size = min(len(img_paths), 20)
+    selected_imgs = random.sample(img_paths, sample_size)
 
-    img_html_list = []
+    img_elements = []
     for path in selected_imgs:
         try:
             with open(path, "rb") as f:
                 data = base64.b64encode(f.read()).decode("utf-8")
                 ext = path.split(".")[-1].lower()
                 mime = "image/jpeg" if ext in ["jpg", "jpeg"] else "image/png"
-                img_html_list.append(
-                    f'<div class="bg-img-item"><img src="data:{mime};base64,{data}"/></div>'
+                img_elements.append(
+                    f'<div class="scroll-img-card"><img src="data:{mime};base64,{data}"/></div>'
                 )
         except Exception:
             continue
 
-    grid_inner = "".join(img_html_list)
+    if not img_elements:
+        return
 
-    bg_css = f"""
+    # 1グループ分のHTML（シームレス無限ループのために2グループ並べる）
+    group_html = "".join(img_elements)
+
+    scroll_css = f"""
     <style>
-    /* 背景グリッドコンテナ */
-    .bg-grid-container {{
+    /* 背景用アニメーションエリア */
+    .bg-scroll-wrapper {{
         position: fixed;
         top: 0;
         left: 0;
         width: 100vw;
         height: 100vh;
         z-index: -1;
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-        grid-auto-rows: 120px;
-        gap: 2px;
-        opacity: 0.25; /* 背景として文字が見やすくなる透過率 */
         overflow: hidden;
         pointer-events: none;
-        filter: grayscale(20%) contrast(110%);
+        opacity: 0.28; /* 背景として文字が見やすくなる不透明度 */
+        display: flex;
+        flex-direction: column;
+        justify-content: space-around;
+        filter: grayscale(15%) contrast(110%);
     }}
-    .bg-img-item {{
-        width: 100%;
-        height: 100%;
+
+    .scroll-row {{
+        display: flex;
+        width: max-content;
+        gap: 12px;
+    }}
+
+    /* 上段：右から左へ移動 (40秒で1周) */
+    .scroll-row.row-left {{
+        animation: scrollLeft 40s linear infinite;
+    }}
+
+    /* 下段：ゆっくり反対方向または速度を変えて流す (55秒で1周) */
+    .scroll-row.row-right {{
+        animation: scrollRight 55s linear infinite;
+    }}
+
+    .scroll-group {{
+        display: flex;
+        gap: 12px;
+    }}
+
+    .scroll-img-card {{
+        width: 140px;
+        height: 140px;
+        flex-shrink: 0;
+        border-radius: 8px;
         overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
     }}
-    .bg-img-item img {{
+
+    .scroll-img-card img {{
         width: 100%;
         height: 100%;
         object-fit: cover;
     }}
-    /* Streamlit標準メイン領域を半透明白にして可読性を確保 */
+
+    /* 無限ループ用 Keyframes */
+    @keyframes scrollLeft {{
+        0% {{ transform: translateX(0); }}
+        100% {{ transform: translateX(-50%); }}
+    }}
+
+    @keyframes scrollRight {{
+        0% {{ transform: translateX(-50%); }}
+        100% {{ transform: translateX(0); }}
+    }}
+
+    /* Streamlit標準のメインエリア背景透過＆パネル装飾 */
     .stApp > header {{
         background-color: transparent !important;
     }}
+
     .main .block-container {{
-        background-color: rgba(255, 255, 255, 0.92);
-        padding: 2rem;
+        background-color: rgba(255, 255, 255, 0.93);
+        padding: 2.2rem;
         border-radius: 12px;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        box-shadow: 0 4px 20px rgba(0,0,0,0.12);
         margin-top: 1rem;
         margin-bottom: 2rem;
     }}
     </style>
-    <div class="bg-grid-container">
-        {grid_inner}
+
+    <div class="bg-scroll-wrapper">
+        <!-- 上段レーン (右→左) -->
+        <div class="scroll-row row-left">
+            <div class="scroll-group">{group_html}</div>
+            <div class="scroll-group">{group_html}</div>
+        </div>
+        <!-- 中段レーン (左→右/速度変更) -->
+        <div class="scroll-row row-right">
+            <div class="scroll-group">{group_html}</div>
+            <div class="scroll-group">{group_html}</div>
+        </div>
+        <!-- 下段レーン (右→左) -->
+        <div class="scroll-row row-left">
+            <div class="scroll-group">{group_html}</div>
+            <div class="scroll-group">{group_html}</div>
+        </div>
     </div>
     """
-    st.markdown(bg_css, unsafe_allow_html=True)
+    st.markdown(scroll_css, unsafe_allow_html=True)
 
 
 # --- ページ基本設定 ---
@@ -216,8 +274,8 @@ st.set_page_config(
     page_title="ONE PIECE ナレッジキング対策", page_icon="🏴‍☠️", layout="wide"
 )
 
-# 背景画像のランダムグリッドを適用
-set_background_grid()
+# 常時流れる背景アニメーションを実行
+set_infinite_scrolling_background()
 
 # 画面切り替え用の状態初期化
 if "current_nav" not in st.session_state:
