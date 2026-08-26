@@ -16,7 +16,7 @@ from streamlit_option_menu import option_menu
 # --- データ読み込み用共通関数 ---
 @st.cache_data
 def load_all_data():
-    """リポジトリ内の全Excelファイル（character_master.xlsx, quiz_data.xlsx, 問題集.xlsx など）を統合して読み込む"""
+    """リポジトリ内の全Excelファイルを統合して読み込む"""
     files = glob.glob("*.xlsx")
     if not files:
         return pd.DataFrame()
@@ -180,7 +180,6 @@ df_all = load_all_data()
 
 # --- 1. ホーム画面 ---
 if selected == "ホーム":
-    # フォルダから画像パスを取得
     all_imgs = (
         glob.glob("images/*.png")
         + glob.glob("images/*.jpg")
@@ -189,10 +188,10 @@ if selected == "ホーム":
         + glob.glob("*.jpg")
     )
 
-    # WT100風の背景グリッド用HTML（最大40枚までランダム抽出して敷き詰め）
+    # シームレスループ用に十分な画像枚数（60枚）を抽出
     grid_imgs_html = ""
     if all_imgs:
-        sample_imgs = random.sample(all_imgs, min(len(all_imgs), 40))
+        sample_imgs = [random.choice(all_imgs) for _ in range(60)]
         for img_path in sample_imgs:
             try:
                 with open(img_path, "rb") as f:
@@ -203,36 +202,45 @@ if selected == "ホーム":
             except Exception:
                 continue
 
-    # WT100風 モザイクグリッド＆中央タイトルのHTML/CSS
     banner_html = f"""
     <style>
+    /* 全体コンテナ：縦幅を420pxに広げて縦長化 */
     .wt100-container {{
         position: relative;
         width: 100%;
-        min-height: 280px;
+        height: 420px;
         border-radius: 16px;
         overflow: hidden;
         border: 2px solid #333;
-        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
-        background-color: #111;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+        background-color: #0d0d0d;
         display: flex;
         align-items: center;
         justify-content: center;
     }}
     
-    /* 背景のモザイク画像グリッド */
+    /* 背景モザイク：上から下へスライドするCSSアニメーション */
     .mosaic-bg {{
         position: absolute;
-        top: 0;
+        top: -50%;
         left: 0;
         width: 100%;
-        height: 100%;
+        height: 200%;
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
-        grid-auto-rows: 70px;
-        gap: 2px;
-        opacity: 0.65;
-        filter: saturate(1.2);
+        grid-template-columns: repeat(auto-fill, minmax(85px, 1fr));
+        grid-auto-rows: 85px;
+        gap: 3px;
+        opacity: 0.85;
+        animation: scroll-down 25s linear infinite;
+    }}
+
+    @keyframes scroll-down {{
+        0% {{
+            transform: translateY(0);
+        }}
+        100% {{
+            transform: translateY(25%);
+        }}
     }}
     
     .bg-tile {{
@@ -241,41 +249,42 @@ if selected == "ホーム":
         object-fit: cover;
     }}
 
-    /* 中央に浮かび上がるタイトルカード */
+    /* 中央タイトルカード：黒背景を完全に透明化（backdrop-filterのみ保持） */
     .center-overlay {{
         position: relative;
         z-index: 2;
-        background: rgba(0, 0, 0, 0.75);
-        backdrop-filter: blur(4px);
-        padding: 25px 40px;
-        border-radius: 12px;
-        border: 2px solid #ffcc00;
+        background: transparent;
+        backdrop-filter: blur(2px);
+        padding: 35px 50px;
+        border-radius: 16px;
+        border: 3px solid #ffcc00;
         text-align: center;
-        box-shadow: 0 0 20px rgba(255, 204, 0, 0.4);
-        max-width: 90%;
+        box-shadow: 0 0 25px rgba(255, 204, 0, 0.5), inset 0 0 15px rgba(0, 0, 0, 0.5);
+        max-width: 85%;
     }}
     
     .center-overlay h1 {{
-        margin: 0 0 6px 0;
-        font-size: 2.2rem;
+        margin: 0 0 10px 0;
+        font-size: 2.5rem;
         color: #ffffff;
-        font-weight: 800;
-        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
-        letter-spacing: 1px;
+        font-weight: 900;
+        text-shadow: 3px 3px 6px #000000, -2px -2px 4px #000000, 2px -2px 4px #000000, -2px 2px 4px #000000;
+        letter-spacing: 2px;
     }}
     
     .center-overlay p {{
         margin: 0;
         color: #ffcc00;
-        font-size: 1.1rem;
-        font-weight: 600;
-        letter-spacing: 2px;
+        font-size: 1.25rem;
+        font-weight: 700;
+        text-shadow: 2px 2px 4px #000000, -1px -1px 2px #000000;
+        letter-spacing: 3px;
     }}
     </style>
 
     <div class="wt100-container">
         <div class="mosaic-bg">
-            {grid_imgs_html if grid_imgs_html else '<div style="grid-column: 1/-1; text-align:center; color:#888; padding-top:100px;">（画像を追加すると背景にモザイク表示されます）</div>'}
+            {grid_imgs_html if grid_imgs_html else '<div style="grid-column: 1/-1; text-align:center; color:#888; padding-top:180px;">（画像を追加すると背景にモザイク表示されます）</div>'}
         </div>
         <div class="center-overlay">
             <h1>🏴‍☠️ ONE PIECE ナレッジキング対策</h1>
