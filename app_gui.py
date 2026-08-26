@@ -180,7 +180,7 @@ df_all = load_all_data()
 
 # --- 1. ホーム画面 ---
 if selected == "ホーム":
-    # フォルダから画像パスをランダムに取得
+    # フォルダから画像パスを取得
     all_imgs = (
         glob.glob("images/*.png")
         + glob.glob("images/*.jpg")
@@ -189,82 +189,97 @@ if selected == "ホーム":
         + glob.glob("*.jpg")
     )
 
-    img_tags = ""
+    # WT100風の背景グリッド用HTML（最大40枚までランダム抽出して敷き詰め）
+    grid_imgs_html = ""
     if all_imgs:
-        # ランダムに抽出してHTML化（無限ループ用に同じ要素を2セット配置）
-        sample_size = min(len(all_imgs), 15)
-        sample_imgs = random.sample(all_imgs, sample_size)
-        for img_path in sample_imgs * 2:
+        sample_imgs = random.sample(all_imgs, min(len(all_imgs), 40))
+        for img_path in sample_imgs:
             try:
                 with open(img_path, "rb") as f:
                     b64 = base64.b64encode(f.read()).decode("utf-8")
                     ext = img_path.split(".")[-1].lower()
                     mime = "image/jpeg" if ext in ["jpg", "jpeg"] else "image/png"
-                    img_tags += f'<img src="data:{mime};base64,{b64}" class="banner-img" />'
+                    grid_imgs_html += f'<img src="data:{mime};base64,{b64}" class="bg-tile" />'
             except Exception:
                 continue
 
-    # 表題枠（拡張版）と枠内画像スライダーのHTML/CSS
+    # WT100風 モザイクグリッド＆中央タイトルのHTML/CSS
     banner_html = f"""
     <style>
-    .title-card {{
-        border: 2px solid #333;
-        border-radius: 16px;
-        padding: 35px 20px 25px 20px;
-        text-align: center;
-        background-color: rgba(255, 255, 255, 0.95);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-        overflow: hidden;
+    .wt100-container {{
         position: relative;
-    }}
-    .title-card h1 {{
-        margin: 0 0 8px 0;
-        font-size: 2.2rem;
-        color: #111;
-    }}
-    .title-card p {{
-        margin: 0 0 20px 0;
-        color: #555;
-        font-size: 1.05rem;
+        width: 100%;
+        min-height: 280px;
+        border-radius: 16px;
+        overflow: hidden;
+        border: 2px solid #333;
+        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+        background-color: #111;
+        display: flex;
+        align-items: center;
+        justify-content: center;
     }}
     
-    /* 枠内画像スライダーエリア */
-    .banner-slider-container {{
+    /* 背景のモザイク画像グリッド */
+    .mosaic-bg {{
+        position: absolute;
+        top: 0;
+        left: 0;
         width: 100%;
-        overflow: hidden;
-        position: relative;
-        margin-top: 15px;
-        border-top: 1px dashed #ccc;
-        padding-top: 15px;
+        height: 100%;
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+        grid-auto-rows: 70px;
+        gap: 2px;
+        opacity: 0.65;
+        filter: saturate(1.2);
     }}
-    .banner-track {{
-        display: flex;
-        width: max-content;
-        animation: bannerScroll 30s linear infinite;
-        gap: 12px;
-    }}
-    .banner-img {{
-        width: 110px;
-        height: 110px;
+    
+    .bg-tile {{
+        width: 100%;
+        height: 100%;
         object-fit: cover;
-        border-radius: 8px;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.15);
-        flex-shrink: 0;
     }}
-    @keyframes bannerScroll {{
-        0% {{ transform: translateX(0); }}
-        100% {{ transform: translateX(-50%); }}
+
+    /* 中央に浮かび上がるタイトルカード */
+    .center-overlay {{
+        position: relative;
+        z-index: 2;
+        background: rgba(0, 0, 0, 0.75);
+        backdrop-filter: blur(4px);
+        padding: 25px 40px;
+        border-radius: 12px;
+        border: 2px solid #ffcc00;
+        text-align: center;
+        box-shadow: 0 0 20px rgba(255, 204, 0, 0.4);
+        max-width: 90%;
+    }}
+    
+    .center-overlay h1 {{
+        margin: 0 0 6px 0;
+        font-size: 2.2rem;
+        color: #ffffff;
+        font-weight: 800;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+        letter-spacing: 1px;
+    }}
+    
+    .center-overlay p {{
+        margin: 0;
+        color: #ffcc00;
+        font-size: 1.1rem;
+        font-weight: 600;
+        letter-spacing: 2px;
     }}
     </style>
 
-    <div class="title-card">
-        <h1>🏴‍☠️ ONE PIECE ナレッジキング対策</h1>
-        <p>最強のデータベースを脳に刻め</p>
-        
-        <div class="banner-slider-container">
-            <div class="banner-track">
-                {img_tags if img_tags else '<p style="color:#888;">（画像フォルダに画像を追加するとここに表示されます）</p>'}
-            </div>
+    <div class="wt100-container">
+        <div class="mosaic-bg">
+            {grid_imgs_html if grid_imgs_html else '<div style="grid-column: 1/-1; text-align:center; color:#888; padding-top:100px;">（画像を追加すると背景にモザイク表示されます）</div>'}
+        </div>
+        <div class="center-overlay">
+            <h1>🏴‍☠️ ONE PIECE ナレッジキング対策</h1>
+            <p>― 最強のデータベースを脳に刻め ―</p>
         </div>
     </div>
     """
