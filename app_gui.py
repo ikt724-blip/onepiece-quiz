@@ -477,8 +477,6 @@ elif selected == "📖 練習モード":
                     else:
                         st.error(f"❌ 不正解... 正解は: **{disp_ans}**")
 
-                    display_question_image(q, caption=f"正解：{disp_ans}")
-
                     exp = get_clean_str(q.get("explanation") or q.get("解説"))
                     if exp:
                         st.caption(f"💡 【解説】: {exp}")
