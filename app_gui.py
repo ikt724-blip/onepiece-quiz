@@ -1,5 +1,6 @@
 import glob
 import io
+import math
 import os
 import random
 import re
@@ -55,53 +56,68 @@ def check_answer(user_input, correct_ans):
     return False
 
 
-# キャラマスターデータから問題文と正解を動的に自動生成する関数
+# 有効文字列判定ヘルパー
+def get_clean_str(val):
+    """NaNやNone、空文字を排除して正しい文字列を返す"""
+    if pd.isna(val) or val is None:
+        return ""
+    s = str(val).strip()
+    if s.lower() in ["nan", "none", "<na>"]:
+        return ""
+    return s
+
+
+# キャラマスターデータから問題文と正解を確定させるロジック
 def format_question_and_answer(q):
-    """
-    Excelの行データから適切な問題文と正解を抽出・生成する
-    """
-    raw_question = q.get("question") or q.get("問題")
-    name = str(q.get("name", "")).strip()
-    image = str(q.get("image", "")).strip()
-    devil_fruit = str(q.get("devil_fruit", "")).strip()
-    affiliation = str(
-        q.get("affiliation") or q.get("所属") or q.get("group") or ""
-    ).strip()
+    raw_question = get_clean_str(
+        q.get("question") or q.get("問題") or q.get("Question")
+    )
+    name = get_clean_str(
+        q.get("name") or q.get("名前") or q.get("キャラ名") or q.get("Name")
+    )
+    image = get_clean_str(q.get("image") or q.get("画像"))
+    devil_fruit = get_clean_str(
+        q.get("devil_fruit") or q.get("悪魔の実") or q.get("能力")
+    )
+    affiliation = get_clean_str(
+        q.get("affiliation") or q.get("所属") or q.get("組織")
+    )
+    nickname = get_clean_str(
+        q.get("nickname") or q.get("異名") or q.get("通り名")
+    )
 
-    # 有効な文字列かチェックするヘルパー
-    def is_valid(val):
-        return bool(val) and val != "nan" and val != "None"
-
-    # 1. 通常の問題文が用意されている場合
-    if is_valid(raw_question):
-        ans = str(
+    # 1. 元から有効な問題文が存在する場合
+    if raw_question:
+        ans = get_clean_str(
             q.get("answer")
             or q.get("解答")
-            or q.get("devil_fruit")
-            or q.get("name")
-            or ""
-        ).strip()
-        return str(raw_question), ans
+            or q.get("正解")
+            or devil_fruit
+            or name
+        )
+        return raw_question, ans
 
-    # 2. 問題文がなく、画像とキャラ名がある場合 ➡ キャラ名当て問題
-    if is_valid(image) and is_valid(name):
+    # 2. 問題文がなく、画像が存在する場合 ➡ キャラ当て問題
+    if image and name:
         return "このキャラクターの名前は？", name
 
-    # 3. 悪魔の実データがある場合 ➡ 悪魔の実当て問題
-    if is_valid(devil_fruit) and is_valid(name):
+    # 3. 悪魔の実が存在する場合 ➡ 悪魔の実当て問題
+    if devil_fruit and name:
         return f"「{name}」が食べた悪魔の日の名称は？", devil_fruit
 
-    # 4. 所属データがある場合 ➡ 所属当て問題
-    if is_valid(affiliation) and is_valid(name):
+    # 4. 所属が存在する場合 ➡ 所属当て問題
+    if affiliation and name:
         return f"「{name}」の主な所属（組織・海賊団など）は？", affiliation
 
-    # 5. キャラ名のみ存在する場合
-    if is_valid(name):
-        return f"「{name}」の異名（通り名）または役職は？", str(
-            q.get("nickname", "") or q.get("異名", "")
-        ).strip()
+    # 5. 異名が存在する場合
+    if nickname and name:
+        return f"「{name}」の異名（通り名）は？", nickname
 
-    return "問題文の取得に失敗しました", ""
+    # 6. 名前のみある場合
+    if name:
+        return "このキャラクターの名前は？", name
+
+    return "このキャラクターの名前は？", name
 
 
 # --- ページ基本設定 ---
@@ -241,12 +257,11 @@ elif selected == "📖 練習モード":
                 st.progress((curr_idx) / total_q)
                 st.markdown(f"### 第 {curr_idx + 1} 問 / 全 {total_q} 問")
 
-                # 動的問題生成処理
                 question_text, correct_ans = format_question_and_answer(q)
                 st.info(f"**【問題】**\n{question_text}")
 
-                img_name = str(q.get("image", ""))
-                if img_name and img_name != "nan":
+                img_name = get_clean_str(q.get("image") or q.get("画像"))
+                if img_name:
                     imgPath = (
                         img_name
                         if os.path.exists(img_name)
@@ -295,8 +310,8 @@ elif selected == "📖 練習モード":
                     else:
                         st.error(f"❌ 不正解... 正解は: **{correct_ans}**")
 
-                    exp = q.get("explanation") or q.get("解説") or ""
-                    if pd.notna(exp) and str(exp).strip():
+                    exp = get_clean_str(q.get("explanation") or q.get("解説"))
+                    if exp:
                         st.caption(f"💡 【解説】: {exp}")
 
                     st.session_state.p_user_answers.append(
@@ -414,12 +429,11 @@ elif selected == "🏆 本番模試（50問/60分）":
                 q = st.session_state.e_quiz_list[curr_idx]
                 st.markdown(f"### 第 {curr_idx + 1} 問 / 全 {total_q} 問")
 
-                # 動的問題生成処理
                 question_text, correct_ans = format_question_and_answer(q)
                 st.info(f"**【問題】**\n{question_text}")
 
-                img_name = str(q.get("image", ""))
-                if img_name and img_name != "nan":
+                img_name = get_clean_str(q.get("image") or q.get("画像"))
+                if img_name:
                     imgPath = (
                         img_name
                         if os.path.exists(img_name)
