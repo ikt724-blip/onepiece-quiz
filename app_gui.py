@@ -15,7 +15,7 @@ from streamlit_option_menu import option_menu
 # --- データ読み込み用共通関数 ---
 @st.cache_data
 def load_all_data():
-    """リポジトリ内の全Excelファイル（character_master.xlsx, 問題集.xlsx など）を統合して読み込む"""
+    """リポジトリ内の全Excelファイル（character_master.xlsx, quiz_data.xlsx, 問題集.xlsx など）を統合して読み込む"""
     files = glob.glob("*.xlsx")
     if not files:
         return pd.DataFrame()
@@ -34,6 +34,22 @@ def load_all_data():
 
     merged_df = pd.concat(df_list, ignore_index=True)
     return merged_df
+
+
+# 画像表示ヘルパー関数
+def display_question_image(q_data, width=300, caption=None):
+    """画像パスを探して表示する関数"""
+    img_name = get_clean_str(q_data.get("image") or q_data.get("画像"))
+    if img_name:
+        imgPath = (
+            img_name
+            if os.path.exists(img_name)
+            else os.path.join("images", img_name)
+        )
+        if os.path.exists(imgPath):
+            st.image(imgPath, width=width, caption=caption)
+            return True
+    return False
 
 
 # 正解判定共通ロジック
@@ -260,15 +276,10 @@ elif selected == "📖 練習モード":
                 question_text, correct_ans = format_question_and_answer(q)
                 st.info(f"**【問題】**\n{question_text}")
 
-                img_name = get_clean_str(q.get("image") or q.get("画像"))
-                if img_name:
-                    imgPath = (
-                        img_name
-                        if os.path.exists(img_name)
-                        else os.path.join("images", img_name)
-                    )
-                    if os.path.exists(imgPath):
-                        st.image(imgPath, width=300)
+                # 解答前の画像表示（画像参照問題の場合）
+                is_char_q = "このキャラクターの名前は？" in question_text
+                if is_char_q:
+                    display_question_image(q)
 
                 is_sort = (
                     q.get("type") == "並び替え"
@@ -309,6 +320,9 @@ elif selected == "📖 練習モード":
                         st.session_state.p_score += 1
                     else:
                         st.error(f"❌ 不正解... 正解は: **{correct_ans}**")
+
+                    # 解答後に画像を表示
+                    display_question_image(q, caption=f"正解：{correct_ans}")
 
                     exp = get_clean_str(q.get("explanation") or q.get("解説"))
                     if exp:
@@ -432,15 +446,9 @@ elif selected == "🏆 本番模試（50問/60分）":
                 question_text, correct_ans = format_question_and_answer(q)
                 st.info(f"**【問題】**\n{question_text}")
 
-                img_name = get_clean_str(q.get("image") or q.get("画像"))
-                if img_name:
-                    imgPath = (
-                        img_name
-                        if os.path.exists(img_name)
-                        else os.path.join("images", img_name)
-                    )
-                    if os.path.exists(imgPath):
-                        st.image(imgPath, width=300)
+                is_char_q = "このキャラクターの名前は？" in question_text
+                if is_char_q:
+                    display_question_image(q)
 
                 is_sort = (
                     q.get("type") == "並び替え"
