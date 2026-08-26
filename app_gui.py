@@ -141,19 +141,33 @@ st.set_page_config(
     page_title="ONE PIECE ナレッジキング対策", page_icon="🏴‍☠️", layout="wide"
 )
 
+# 画面切り替え用の状態初期化
+if "current_nav" not in st.session_state:
+    st.session_state["current_nav"] = "ホーム"
+
+menu_options = [
+    "ホーム",
+    "📖 練習モード",
+    "🏆 本番模試（50問/60分）",
+    "🔥 苦手克服",
+    "🔍 AI検索モード",
+    "➕ データ追加・編集",
+]
+
 # --- サイドバーナビゲーション ---
 with st.sidebar:
     st.header("🏴‍☠️ ナビセンター")
+
+    # セッション状態に合わせてデフォルト位置を計算
+    def_idx = (
+        menu_options.index(st.session_state["current_nav"])
+        if st.session_state["current_nav"] in menu_options
+        else 0
+    )
+
     selected = option_menu(
         menu_title=None,
-        options=[
-            "ホーム",
-            "📖 練習モード",
-            "🏆 本番模試（50問/60分）",
-            "🔥 苦手克服",
-            "🔍 AI検索モード",
-            "➕ データ追加・編集",
-        ],
+        options=menu_options,
         icons=[
             "house",
             "book",
@@ -162,8 +176,10 @@ with st.sidebar:
             "search",
             "plus-circle",
         ],
-        default_index=0,
+        default_index=def_idx,
+        key="nav_menu",
     )
+    st.session_state["current_nav"] = selected
 
 # 全データ取得
 df_all = load_all_data()
@@ -271,12 +287,24 @@ elif selected == "📖 練習モード":
             else:
                 q = st.session_state.p_quiz_list[curr_idx]
                 st.progress((curr_idx) / total_q)
-                st.markdown(f"### 第 {curr_idx + 1} 問 / 全 {total_q} 問")
+
+                c_top1, c_top2 = st.columns([3, 1])
+                with c_top1:
+                    st.markdown(f"### 第 {curr_idx + 1} 問 / 全 {total_q} 問")
+                with c_top2:
+                    if st.button("🛠️ この問題を修正する"):
+                        # 該当問題を修正できるように編集タブ用の検索ワードをセット
+                        question_text, _ = format_question_and_answer(q)
+                        st.session_state["edit_search_keyword"] = (
+                            question_text
+                        )
+                        st.session_state["current_nav"] = "➕ データ追加・編集"
+                        st.rerun()
 
                 question_text, correct_ans = format_question_and_answer(q)
                 st.info(f"**【問題】**\n{question_text}")
 
-                # 解答前の画像表示（画像参照問題の場合）
+                # 解答前の画像表示
                 is_char_q = "このキャラクターの名前は？" in question_text
                 if is_char_q:
                     display_question_image(q)
@@ -691,6 +719,15 @@ elif selected == "➕ データ追加・編集":
     st.write("---")
     st.subheader("✏️ 登録問題一覧 & リアルタイム編集")
 
+    # 練習画面から「修正する」で遷移してきた場合の検索ワード取得
+    default_keyword = st.session_state.get("edit_search_keyword", "")
+
+    filter_kw = st.text_input(
+        "🔍 編集対象問題の絞り込み検索",
+        value=default_keyword,
+        placeholder="問題文や正解のキーワードを入力して絞り込み",
+    )
+
     target_data = pd.concat(
         [df_all, st.session_state["added_data"]], ignore_index=True
     )
@@ -698,11 +735,22 @@ elif selected == "➕ データ追加・編集":
     if target_data.empty:
         st.info("現在表示・編集できるデータがありません。")
     else:
+        if filter_kw:
+            mask = (
+                target_data.astype(str)
+                .apply(
+                    lambda x: x.str.contains(
+                        filter_kw, case=False, na=False
+                    )
+                )
+                .any(axis=1)
+            )
+            target_data = target_data[mask]
+
         st.caption(
             "💡 タブを切り替えてデータを個別に確認・編集できます。セルをダブルクリックすると直接書き換えられます。"
         )
 
-        # キャラデータと通常問題集の判定分離
         is_char_mask = (
             target_data["type"] == "キャラデータ"
             if "type" in target_data.columns
@@ -719,7 +767,7 @@ elif selected == "➕ データ追加・編集":
         with view_tab1:
             st.markdown("##### 👥 キャラクターマスター 一覧")
             if char_df.empty:
-                st.caption("登録されているキャラクターデータはありません。")
+                st.caption("該当するキャラクターデータはありません。")
             else:
                 edited_char = st.data_editor(
                     char_df,
@@ -741,7 +789,7 @@ elif selected == "➕ データ追加・編集":
         with view_tab2:
             st.markdown("##### 📝 記述・並び替え問題集 一覧")
             if quiz_df.empty:
-                st.caption("登録されている問題集データはありません。")
+                st.caption("該当する問題集データはありません。")
             else:
                 edited_quiz = st.data_editor(
                     quiz_df,
@@ -761,8 +809,9 @@ elif selected == "➕ データ追加・編集":
                 )
 
         st.write("")
-        if st.button("🔄 一時追加データをリセット"):
+        if st.button("🔄 一時追加データ・検索フィルターをリセット"):
             st.session_state["added_data"] = pd.DataFrame()
+            st.session_state["edit_search_keyword"] = ""
             st.rerun()
 
         st.caption(
