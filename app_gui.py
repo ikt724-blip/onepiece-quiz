@@ -5,6 +5,7 @@ import os
 import random
 import re
 import time
+import base64
 import pandas as pd
 import qrcode
 import streamlit as st
@@ -102,7 +103,6 @@ def format_question_and_answer(q):
         q.get("nickname") or q.get("異名") or q.get("通り名")
     )
 
-    # 1. 元から有効な問題文が存在する場合
     if raw_question:
         ans = get_clean_str(
             q.get("answer")
@@ -113,33 +113,111 @@ def format_question_and_answer(q):
         )
         return raw_question, ans
 
-    # 2. 問題文がなく、画像が存在する場合 ➡ キャラ当て問題
     if image and name:
         return "このキャラクターの名前は？", name
 
-    # 3. 悪魔の実が存在する場合 ➡ 悪魔の実当て問題
     if devil_fruit and name:
         return f"「{name}」が食べた悪魔の実の名称は？", devil_fruit
 
-    # 4. 所属が存在する場合 ➡ 所属当て問題
     if affiliation and name:
         return f"「{name}」の主な所属（組織・海賊団など）は？", affiliation
 
-    # 5. 異名が存在する場合
     if nickname and name:
         return f"「{name}」の異名（通り名）は？", nickname
 
-    # 6. 名前のみある場合
     if name:
         return "このキャラクターの名前は？", name
 
     return "このキャラクターの名前は？", name
 
 
+# --- 背景画像グリッド生成ヘルパー ---
+def set_background_grid():
+    """フォルダ内の画像をランダム抽出して背景グリッドを生成・注入する"""
+    img_paths = (
+        glob.glob("images/*.png")
+        + glob.glob("images/*.jpg")
+        + glob.glob("images/*.jpeg")
+        + glob.glob("*.png")
+        + glob.glob("*.jpg")
+    )
+    if not img_paths:
+        return
+
+    # ランダムに最大30枚選出
+    selected_imgs = random.sample(img_paths, min(len(img_paths), 30))
+
+    img_html_list = []
+    for path in selected_imgs:
+        try:
+            with open(path, "rb") as f:
+                data = base64.b64encode(f.read()).decode("utf-8")
+                ext = path.split(".")[-1].lower()
+                mime = "image/jpeg" if ext in ["jpg", "jpeg"] else "image/png"
+                img_html_list.append(
+                    f'<div class="bg-img-item"><img src="data:{mime};base64,{data}"/></div>'
+                )
+        except Exception:
+            continue
+
+    grid_inner = "".join(img_html_list)
+
+    bg_css = f"""
+    <style>
+    /* 背景グリッドコンテナ */
+    .bg-grid-container {{
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        z-index: -1;
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        grid-auto-rows: 120px;
+        gap: 2px;
+        opacity: 0.25; /* 背景として文字が見やすくなる透過率 */
+        overflow: hidden;
+        pointer-events: none;
+        filter: grayscale(20%) contrast(110%);
+    }}
+    .bg-img-item {{
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+    }}
+    .bg-img-item img {{
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }}
+    /* Streamlit標準メイン領域を半透明白にして可読性を確保 */
+    .stApp > header {{
+        background-color: transparent !important;
+    }}
+    .main .block-container {{
+        background-color: rgba(255, 255, 255, 0.92);
+        padding: 2rem;
+        border-radius: 12px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        margin-top: 1rem;
+        margin-bottom: 2rem;
+    }}
+    </style>
+    <div class="bg-grid-container">
+        {grid_inner}
+    </div>
+    """
+    st.markdown(bg_css, unsafe_allow_html=True)
+
+
 # --- ページ基本設定 ---
 st.set_page_config(
     page_title="ONE PIECE ナレッジキング対策", page_icon="🏴‍☠️", layout="wide"
 )
+
+# 背景画像のランダムグリッドを適用
+set_background_grid()
 
 # 画面切り替え用の状態初期化
 if "current_nav" not in st.session_state:
@@ -158,7 +236,6 @@ menu_options = [
 with st.sidebar:
     st.header("🏴‍☠️ ナビセンター")
 
-    # セッション状態に合わせてデフォルト位置を計算
     def_idx = (
         menu_options.index(st.session_state["current_nav"])
         if st.session_state["current_nav"] in menu_options
@@ -188,7 +265,7 @@ df_all = load_all_data()
 if selected == "ホーム":
     st.markdown(
         """
-        <div style="border:2px solid #333; padding:20px; border-radius:10px; text-align:center;">
+        <div style="border:2px solid #333; padding:20px; border-radius:10px; text-align:center; background-color: rgba(255, 255, 255, 0.85);">
             <h1>🏴‍☠️ ONE PIECE ナレッジキング対策</h1>
             <p>最強のデータベースを脳に刻め</p>
         </div>
@@ -293,7 +370,6 @@ elif selected == "📖 練習モード":
                     st.markdown(f"### 第 {curr_idx + 1} 問 / 全 {total_q} 問")
                 with c_top2:
                     if st.button("🛠️ この問題を修正する"):
-                        # 該当問題を修正できるように編集タブ用の検索ワードをセット
                         question_text, _ = format_question_and_answer(q)
                         st.session_state["edit_search_keyword"] = (
                             question_text
@@ -304,7 +380,6 @@ elif selected == "📖 練習モード":
                 question_text, correct_ans = format_question_and_answer(q)
                 st.info(f"**【問題】**\n{question_text}")
 
-                # 解答前の画像表示
                 is_char_q = "このキャラクターの名前は？" in question_text
                 if is_char_q:
                     display_question_image(q)
@@ -349,7 +424,6 @@ elif selected == "📖 練習モード":
                     else:
                         st.error(f"❌ 不正解... 正解は: **{correct_ans}**")
 
-                    # 解答後に画像を表示
                     display_question_image(q, caption=f"正解：{correct_ans}")
 
                     exp = get_clean_str(q.get("explanation") or q.get("解説"))
@@ -719,7 +793,6 @@ elif selected == "➕ データ追加・編集":
     st.write("---")
     st.subheader("✏️ 登録問題一覧 & リアルタイム編集")
 
-    # 練習画面から「修正する」で遷移してきた場合の検索ワード取得
     default_keyword = st.session_state.get("edit_search_keyword", "")
 
     filter_kw = st.text_input(
