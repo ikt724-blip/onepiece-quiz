@@ -568,7 +568,7 @@ elif selected == "➕ データ追加・編集":
                     [st.session_state["added_data"], new_row], ignore_index=True
                 )
                 st.success(
-                    "キャラデータを一時追加しました！下の「問題一覧・編集」から確認・編集できます。"
+                    "キャラデータを一時追加しました！下の「キャラクターマスター」タブから確認・編集できます。"
                 )
 
     with tab2:
@@ -627,7 +627,7 @@ elif selected == "➕ データ追加・編集":
                         [st.session_state["added_data"], new_row],
                         ignore_index=True,
                     )
-                    st.success("記述問題を一時追加しました！")
+                    st.success("記述問題を一時追加しました！下の「問題集データ」タブから確認できます。")
                 else:
                     st.error("問題文と少なくとも1つの正解を入力してください。")
 
@@ -676,7 +676,7 @@ elif selected == "➕ データ追加・編集":
                         [st.session_state["added_data"], new_row],
                         ignore_index=True,
                     )
-                    st.success("並び替え問題を一時追加しました！")
+                    st.success("並び替え問題を一時追加しました！下の「問題集データ」タブから確認できます。")
                 else:
                     st.error("必要な項目を入力してください。")
 
@@ -691,33 +691,72 @@ elif selected == "➕ データ追加・編集":
         st.info("現在表示・編集できるデータがありません。")
     else:
         st.caption(
-            "💡 セルを直接ダブルクリックして文章や正解を書き換えられます（行の追加・削除も可能）。"
+            "💡 タブを切り替えてデータを個別に確認・編集できます。セルをダブルクリックすると直接書き換えられます。"
         )
 
-        edited_df = st.data_editor(
-            target_data,
-            num_rows="dynamic",
-            use_container_width=True,
-            key="master_data_editor",
+        # キャラデータと通常問題集の判定分離
+        is_char_mask = (
+            target_data["type"] == "キャラデータ"
+            if "type" in target_data.columns
+            else pd.Series(False, index=target_data.index)
         )
+        if not is_char_mask.any() and "characterid" in target_data.columns:
+            is_char_mask = target_data["characterid"].notna()
 
-        buffer = io.BytesIO()
-        with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-            edited_df.to_excel(writer, index=False)
+        char_df = target_data[is_char_mask].copy().dropna(how="all", axis=1)
+        quiz_df = target_data[~is_char_mask].copy().dropna(how="all", axis=1)
 
-        col_dl, col_clr = st.columns([3, 1])
-        with col_dl:
-            st.download_button(
-                label="📥 編集後の全データをExcelファイルとして保存 (`updated_quiz_data.xlsx`)",
-                data=buffer.getvalue(),
-                file_name="updated_quiz_data.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            )
-        with col_clr:
-            if st.button("🔄 編集をリセット"):
-                st.session_state["added_data"] = pd.DataFrame()
-                st.rerun()
+        view_tab1, view_tab2 = st.tabs(["👥 キャラクターマスター", "📝 問題集データ"])
+
+        with view_tab1:
+            st.markdown("##### 👥 キャラクターマスター 一覧")
+            if char_df.empty:
+                st.caption("登録されているキャラクターデータはありません。")
+            else:
+                edited_char = st.data_editor(
+                    char_df,
+                    num_rows="dynamic",
+                    use_container_width=True,
+                    key="editor_char_data",
+                )
+                buffer_char = io.BytesIO()
+                with pd.ExcelWriter(buffer_char, engine="openpyxl") as writer:
+                    edited_char.to_excel(writer, index=False)
+
+                st.download_button(
+                    label="📥 キャラクターマスターをExcel出力 (`character_master.xlsx`)",
+                    data=buffer_char.getvalue(),
+                    file_name="character_master.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+
+        with view_tab2:
+            st.markdown("##### 📝 記述・並び替え問題集 一覧")
+            if quiz_df.empty:
+                st.caption("登録されている問題集データはありません。")
+            else:
+                edited_quiz = st.data_editor(
+                    quiz_df,
+                    num_rows="dynamic",
+                    use_container_width=True,
+                    key="editor_quiz_data",
+                )
+                buffer_quiz = io.BytesIO()
+                with pd.ExcelWriter(buffer_quiz, engine="openpyxl") as writer:
+                    edited_quiz.to_excel(writer, index=False)
+
+                st.download_button(
+                    label="📥 問題集データをExcel出力 (`quiz_data.xlsx`)",
+                    data=buffer_quiz.getvalue(),
+                    file_name="quiz_data.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+
+        st.write("")
+        if st.button("🔄 一時追加データをリセット"):
+            st.session_state["added_data"] = pd.DataFrame()
+            st.rerun()
 
         st.caption(
-            "※ダウンロードした `updated_quiz_data.xlsx` をGitHubにアップロード（上書きまたは追加）すると本番アプリに反映されます。"
+            "※ダウンロードしたファイルをGitHubにアップロード（上書き保存）すると、本番データに反映されます。"
         )
