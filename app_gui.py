@@ -53,24 +53,39 @@ def display_question_image(q_data, width=300, caption=None):
     return False
 
 
-# 正解判定共通ロジック
-def check_answer(user_input, correct_ans):
-    u_clean = str(user_input).strip()
-    correct_ans = str(correct_ans).strip()
-    if not u_clean:
+# 正解リスト抽出ヘルパー
+def get_correct_answers_list(q, correct_ans_str):
+    """問題データから正解の要素リストを取得する"""
+    answers = []
+    # answer_1, answer_2 ... の個別カラムがある場合
+    for i in range(1, 10):
+        val = get_clean_str(q.get(f"answer_{i}"))
+        if val:
+            answers.append(val)
+            
+    if not answers and correct_ans_str:
+        # 読点やカンマで区切られている場合
+        if "、" in correct_ans_str or "," in correct_ans_str:
+            answers = [
+                t.strip() for t in re.split(r"[、,]", correct_ans_str) if t.strip()
+            ]
+        else:
+            answers = [correct_ans_str.strip()]
+            
+    return answers
+
+
+# 正解判定共通ロジック (順不同対応)
+def check_answers_multi(user_inputs, correct_answers):
+    """複数入力された回答と正解リストを順不同で照合"""
+    # 空白除去
+    user_clean = [str(u).strip() for u in user_inputs if str(u).strip()]
+    correct_clean = [str(c).strip() for c in correct_answers if str(c).strip()]
+
+    if len(user_clean) != len(correct_clean):
         return False
-    if correct_ans == u_clean:
-        return True
-    if "、" in correct_ans or "," in correct_ans:
-        targets = [
-            t.strip() for t in re.split(r"[、,]", correct_ans) if t.strip()
-        ]
-        user_parts = [
-            u.strip() for u in re.split(r"[、,,\s]", u_clean) if u.strip()
-        ]
-        if set(targets) == set(user_parts):
-            return True
-    return False
+
+    return set(user_clean) == set(correct_clean)
 
 
 # 有効文字列判定ヘルパー
@@ -188,7 +203,6 @@ if selected == "ホーム":
         + glob.glob("*.jpg")
     )
 
-    # シームレスループ用に十分な画像枚数（60枚）を抽出
     grid_imgs_html = ""
     if all_imgs:
         sample_imgs = [random.choice(all_imgs) for _ in range(60)]
@@ -204,7 +218,6 @@ if selected == "ホーム":
 
     banner_html = f"""
     <style>
-    /* 全体コンテナ：縦幅を420pxに広げて縦長化 */
     .wt100-container {{
         position: relative;
         width: 100%;
@@ -219,7 +232,6 @@ if selected == "ホーム":
         justify-content: center;
     }}
     
-    /* 背景モザイク：上から下へスライドするCSSアニメーション */
     .mosaic-bg {{
         position: absolute;
         top: -50%;
@@ -249,7 +261,6 @@ if selected == "ホーム":
         object-fit: cover;
     }}
 
-    /* 中央タイトルカード：黒背景を完全に透明化（backdrop-filterのみ保持） */
     .center-overlay {{
         position: relative;
         z-index: 2;
@@ -400,7 +411,7 @@ elif selected == "📖 練習モード":
                         st.session_state["current_nav"] = "➕ データ追加・編集"
                         st.rerun()
 
-                question_text, correct_ans = format_question_and_answer(q)
+                question_text, correct_ans_raw = format_question_and_answer(q)
                 st.info(f"**【問題】**\n{question_text}")
 
                 is_char_q = "このキャラクターの名前は？" in question_text
@@ -422,13 +433,30 @@ elif selected == "📖 練習モード":
                         st.write(f"3. {q.get('option3', '')}")
                         st.write(f"4. {q.get('option4', '')}")
 
+                # 正解リストの抽出と入力欄数の決定
+                correct_list = get_correct_answers_list(q, correct_ans_raw)
+                num_inputs = len(correct_list)
+
                 with st.form(f"practice_form_{curr_idx}"):
-                    user_input = st.text_input(
-                        "解答を入力",
-                        placeholder="（並び替えは『2431』のように番号で入力）"
-                        if is_sort
-                        else "ここに解答を記入",
-                    )
+                    user_inputs = []
+                    if num_inputs > 1 and not is_sort:
+                        st.caption(f"💡 解答欄が **{num_inputs}つ** あります（順不同）。")
+                        for i in range(num_inputs):
+                            u_in = st.text_input(
+                                f"解答 {i+1}",
+                                key=f"p_ans_{curr_idx}_{i}",
+                                placeholder=f"解答{i+1}を記入",
+                            )
+                            user_inputs.append(u_in)
+                    else:
+                        u_in = st.text_input(
+                            "解答を入力",
+                            placeholder="（並び替えは『2431』のように番号で入力）"
+                            if is_sort
+                            else "ここに解答を記入",
+                        )
+                        user_inputs.append(u_in)
+
                     sub_c1, sub_c2 = st.columns(2)
                     with sub_c1:
                         submitted = st.form_submit_button(
@@ -440,14 +468,16 @@ elif selected == "📖 練習モード":
                         )
 
                 if submitted:
-                    is_correct = check_answer(user_input, correct_ans)
+                    is_correct = check_answers_multi(user_inputs, correct_list)
+                    disp_ans = "、".join(correct_list)
+
                     if is_correct:
                         st.success("⭕ 正解！")
                         st.session_state.p_score += 1
                     else:
-                        st.error(f"❌ 不正解... 正解は: **{correct_ans}**")
+                        st.error(f"❌ 不正解... 正解は: **{disp_ans}**")
 
-                    display_question_image(q, caption=f"正解：{correct_ans}")
+                    display_question_image(q, caption=f"正解：{disp_ans}")
 
                     exp = get_clean_str(q.get("explanation") or q.get("解説"))
                     if exp:
@@ -456,8 +486,8 @@ elif selected == "📖 練習モード":
                     st.session_state.p_user_answers.append(
                         {
                             "問題": question_text,
-                            "あなたの解答": user_input,
-                            "正解": correct_ans,
+                            "あなたの解答": "、".join([u for u in user_inputs if u]),
+                            "正解": disp_ans,
                             "判定": "⭕ 正解" if is_correct else "❌ 不正解",
                         }
                     )
@@ -537,9 +567,11 @@ elif selected == "🏆 本番模試（50問/60分）":
                 score = 0
                 summary_data = []
                 for idx, q_item in enumerate(st.session_state.e_quiz_list):
-                    q_txt, c_ans = format_question_and_answer(q_item)
-                    u_ans = st.session_state.e_user_answers.get(idx, "")
-                    is_c = check_answer(u_ans, c_ans)
+                    q_txt, c_ans_raw = format_question_and_answer(q_item)
+                    correct_list = get_correct_answers_list(q_item, c_ans_raw)
+                    u_ans_list = st.session_state.e_user_answers.get(idx, [])
+                    
+                    is_c = check_answers_multi(u_ans_list, correct_list)
                     if is_c:
                         score += 1
 
@@ -547,8 +579,8 @@ elif selected == "🏆 本番模試（50問/60分）":
                         {
                             "問": idx + 1,
                             "問題文": q_txt,
-                            "あなたの解答": u_ans,
-                            "正解": c_ans,
+                            "あなたの解答": "、".join(u_ans_list),
+                            "正解": "、".join(correct_list),
                             "判定": "⭕ 正解" if is_c else "❌ 不正解",
                         }
                     )
@@ -568,7 +600,7 @@ elif selected == "🏆 本番模試（50問/60分）":
                 q = st.session_state.e_quiz_list[curr_idx]
                 st.markdown(f"### 第 {curr_idx + 1} 問 / 全 {total_q} 問")
 
-                question_text, correct_ans = format_question_and_answer(q)
+                question_text, correct_ans_raw = format_question_and_answer(q)
                 st.info(f"**【問題】**\n{question_text}")
 
                 is_char_q = "このキャラクターの名前は？" in question_text
@@ -590,11 +622,27 @@ elif selected == "🏆 本番模試（50問/60分）":
                         st.write(f"3. {q.get('option3', '')}")
                         st.write(f"4. {q.get('option4', '')}")
 
-                prev_val = st.session_state.e_user_answers.get(curr_idx, "")
+                correct_list = get_correct_answers_list(q, correct_ans_raw)
+                num_inputs = len(correct_list)
+                prev_vals = st.session_state.e_user_answers.get(curr_idx, [])
+
                 with st.form(f"exam_form_{curr_idx}"):
-                    user_input = st.text_input(
-                        "解答を入力してください", value=prev_val
-                    )
+                    curr_user_inputs = []
+                    if num_inputs > 1 and not is_sort:
+                        st.caption(f"💡 解答欄が **{num_inputs}つ** あります（順不同）。")
+                        for i in range(num_inputs):
+                            p_val = prev_vals[i] if i < len(prev_vals) else ""
+                            u_in = st.text_input(
+                                f"解答 {i+1}",
+                                value=p_val,
+                                key=f"e_ans_{curr_idx}_{i}",
+                            )
+                            curr_user_inputs.append(u_in)
+                    else:
+                        p_val = prev_vals[0] if prev_vals else ""
+                        u_in = st.text_input("解答を入力してください", value=p_val)
+                        curr_user_inputs.append(u_in)
+
                     col_b1, col_b2 = st.columns(2)
                     with col_b1:
                         sub_next = st.form_submit_button(
@@ -606,9 +654,7 @@ elif selected == "🏆 本番模試（50問/60分）":
                         )
 
                 if sub_next:
-                    st.session_state.e_user_answers[curr_idx] = (
-                        user_input.strip()
-                    )
+                    st.session_state.e_user_answers[curr_idx] = curr_user_inputs
                     st.session_state.e_curr_idx += 1
                     st.rerun()
                 elif sub_skip:
