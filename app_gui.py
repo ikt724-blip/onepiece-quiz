@@ -672,7 +672,7 @@ elif selected == "🔥 苦手克服":
     st.subheader("🔥 苦手克服モード")
     st.info("間違えた問題やチェックした問題を重点的に復習できます。")
 
-# --- 5. AI検索モード ---
+# --- 5. AI検索モード（図鑑＋選択画像表示機能） ---
 elif selected == "🔍 AI検索モード":
     st.title("🔍 AI検索モード")
     st.caption("〜 キャラクターマスタ爆速逆引き図鑑 〜")
@@ -680,15 +680,16 @@ elif selected == "🔍 AI検索モード":
 
     if df_all.empty:
         st.error(
-            "『character_master.xlsx』または該当するExcelデータが見つかりません。"
+            "データが見つかりません。Excelファイルを配置してください。"
         )
     else:
         search_query = st.text_input(
             "キーワード検索（名前・悪魔の実・技・所属・エピソードなど）",
             "",
-            placeholder="例: ルフィ、ゴムゴムの実、インペルダウン",
+            placeholder="例: ルフィ、バギー、悪魔の実、シャンクス",
         )
 
+        # 検索フィルタリング
         if search_query:
             mask = (
                 df_all.astype(str)
@@ -699,15 +700,76 @@ elif selected == "🔍 AI検索モード":
                 )
                 .any(axis=1)
             )
-            results = df_all[mask]
-            st.write(f"検索結果: **{len(results)}** 件")
-            if not results.empty:
-                st.dataframe(results, use_container_width=True)
-            else:
-                st.warning("該当するデータが見つかりませんでした。")
+            filtered_df = df_all[mask].reset_index(drop=True)
         else:
-            st.write("上部の検索窓にキーワードを入力してください。")
-            st.dataframe(df_all.head(20), use_container_width=True)
+            filtered_df = df_all.reset_index(drop=True)
+
+        if filtered_df.empty:
+            st.warning("該当するデータが見つかりませんでした。")
+        else:
+            if "search_selected_index" not in st.session_state:
+                st.session_state["search_selected_index"] = 0
+
+            # 選択インデックスの範囲調整
+            sel_idx = min(st.session_state["search_selected_index"], len(filtered_df) - 1)
+            selected_item = filtered_df.iloc[sel_idx]
+
+            # 選択中の詳細・画像プレビューカード
+            c_name = get_clean_str(selected_item.get("name") or selected_item.get("名前")) or "詳細情報"
+            c_id = get_clean_str(selected_item.get("characterid"))
+
+            st.info(f"📌 **【選択中】: {c_name}** {f'(ID: {c_id})' if c_id else ''}")
+            
+            card_col1, card_col2 = st.columns([1, 2])
+            with card_col1:
+                display_question_image(selected_item, width=280)
+            with card_col2:
+                name_val = get_clean_str(selected_item.get("name") or selected_item.get("名前"))
+                if name_val:
+                    st.markdown(f"### {name_val}")
+                
+                nick = get_clean_str(selected_item.get("nickname") or selected_item.get("異名"))
+                if nick:
+                    st.write(f"**異名/通り名:** {nick}")
+                
+                fruit = get_clean_str(selected_item.get("devil_fruit") or selected_item.get("悪魔の実"))
+                if fruit:
+                    st.write(f"**悪魔の実:** {fruit}")
+                
+                ftype = get_clean_str(selected_item.get("fruit_type"))
+                if ftype:
+                    st.write(f"**系統:** {ftype}")
+                
+                aff = get_clean_str(selected_item.get("affiliation") or selected_item.get("所属"))
+                if aff:
+                    st.write(f"**所属:** {aff}")
+
+                q_text, a_text = format_question_and_answer(selected_item)
+                if q_text and not name_val:
+                    st.write(f"**問題:** {q_text}")
+                    st.write(f"**正解:** {a_text}")
+
+                exp = get_clean_str(selected_item.get("explanation") or selected_item.get("解説"))
+                if exp:
+                    st.write(f"**解説:** {exp}")
+
+            st.write("")
+            st.caption(f"💡 一覧表の左端のラジオボタンをクリックして行を選択すると、上の詳細画像が切り替わります。（検索結果: {len(filtered_df)} 件）")
+
+            # テーブル行選択連動
+            search_event = st.dataframe(
+                filtered_df,
+                on_select="rerun",
+                selection_mode="single-row",
+                use_container_width=True,
+                key="df_search_select"
+            )
+
+            if search_event and hasattr(search_event, "selection") and search_event.selection.get("rows"):
+                picked_row = search_event.selection["rows"][0]
+                if picked_row != st.session_state["search_selected_index"]:
+                    st.session_state["search_selected_index"] = picked_row
+                    st.rerun()
 
 # --- 6. データ追加・編集モード ---
 elif selected == "➕ データ追加・編集":
@@ -867,7 +929,7 @@ elif selected == "➕ データ追加・編集":
                         st.error("必要な項目を入力してください。")
 
     # ----------------------------------------------------
-    # 【2. データの編集】（行クリック/クイック選択連動機能付き）
+    # 【2. データの編集】（表を1つにまとめた単一統合エディタ）
     # ----------------------------------------------------
     with main_tab2:
         st.subheader("✏️ データの確認・画像チェック・リアルタイム編集")
@@ -911,27 +973,25 @@ elif selected == "➕ データ追加・編集":
 
             sub_edit_tab1, sub_edit_tab2 = st.tabs(["👥 キャラクターマスター", "📝 問題集データ"])
 
-            # 2-1. キャラクターマスター一覧
+            # 2-1. キャラクターマスター編集 (表を1つに統合)
             with sub_edit_tab1:
-                st.markdown("##### 👥 キャラクターマスター 一覧")
+                st.markdown("##### 👥 キャラクターマスター 一覧・編集")
                 if char_df.empty:
                     st.caption("該当するキャラクターデータはありません。")
                 else:
                     if "selected_char_index" not in st.session_state:
                         st.session_state["selected_char_index"] = 0
 
-                    st.caption("💡 1. 以下のキャラクターボタンを押すか、表の行を選択すると画像・プレビューが即座に切り替わります。")
-                    
-                    # ボタンでワンクリック選択できるクイックバー
+                    # クイック選択ボタン
                     btn_cols = st.columns(min(len(char_df), 6))
                     for i, row in char_df.head(6).iterrows():
                         c_name = get_clean_str(row.get("name") or row.get("名前")) or f"キャラ{i+1}"
                         with btn_cols[i % 6]:
-                            if st.button(f"👤 {c_name}", key=f"btn_char_{i}", use_container_width=True):
+                            if st.button(f"👤 {c_name}", key=f"btn_char_single_{i}", use_container_width=True):
                                 st.session_state["selected_char_index"] = i
                                 st.rerun()
 
-                    # プレビュー表示エリア
+                    # プレビュー
                     curr_char_idx = min(st.session_state["selected_char_index"], len(char_df) - 1)
                     sel_row = char_df.iloc[curr_char_idx]
                     char_label = get_clean_str(sel_row.get('name') or sel_row.get('名前'))
@@ -949,34 +1009,33 @@ elif selected == "➕ データ追加・編集":
                         st.write(f"**画像ファイル名/URL:** `{get_clean_str(sel_row.get('image') or sel_row.get('画像'))}`")
 
                     st.write("")
-                    st.caption("💡 行を選択（左端のラジオボタンをクリック）すると上の画像・データが更新されます。セルの直接編集も可能です。")
-                    
-                    # 行選択（on_select）対応のデータエディタ
-                    event = st.dataframe(
+                    st.caption("💡 行を選択（左端）すると上の画像が切り替わり、そのままセルを直接編集することも可能です。")
+
+                    # 選択機能付きの1つの統合エディタ（st.data_editor）
+                    edited_char = st.data_editor(
                         char_df,
                         on_select="rerun",
                         selection_mode="single-row",
-                        use_container_width=True,
-                        key="df_char_select"
-                    )
-
-                    if event and hasattr(event, "selection") and event.selection.get("rows"):
-                        selected_row_idx = event.selection["rows"][0]
-                        if selected_row_idx != st.session_state["selected_char_index"]:
-                            st.session_state["selected_char_index"] = selected_row_idx
-                            st.rerun()
-
-                    st.write("▼ **直接セルを編集する場合はこちら**")
-                    edited_char = st.data_editor(
-                        char_df,
                         num_rows="dynamic",
                         use_container_width=True,
-                        key="editor_char_data",
+                        key="unified_char_editor"
                     )
-                    
+
+                    # 行選択イベントの検知
+                    if isinstance(edited_char, dict) and "selection" in edited_char:
+                        selected_rows = edited_char["selection"].get("rows", [])
+                        if selected_rows:
+                            sel_r = selected_rows[0]
+                            if sel_r != st.session_state["selected_char_index"]:
+                                st.session_state["selected_char_index"] = sel_r
+                                st.rerun()
+                        edited_char_df = edited_char.get("dataframe", char_df)
+                    else:
+                        edited_char_df = edited_char
+
                     buffer_char = io.BytesIO()
                     with pd.ExcelWriter(buffer_char, engine="openpyxl") as writer:
-                        edited_char.to_excel(writer, index=False)
+                        edited_char_df.to_excel(writer, index=False)
 
                     st.download_button(
                         label="📥 キャラクターマスターをExcel出力 (`character_master.xlsx`)",
@@ -985,9 +1044,9 @@ elif selected == "➕ データ追加・編集":
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     )
 
-            # 2-2. 問題集データ一覧
+            # 2-2. 問題集データ編集 (表を1つに統合)
             with sub_edit_tab2:
-                st.markdown("##### 📝 記述・並び替え問題集 一覧")
+                st.markdown("##### 📝 記述・並び替え問題集 一覧・編集")
                 if quiz_df.empty:
                     st.caption("該当する問題集データはありません。")
                 else:
@@ -1009,33 +1068,32 @@ elif selected == "➕ データ追加・編集":
                         st.write(f"**画像ファイル名/URL:** `{get_clean_str(sel_q_row.get('image') or sel_q_row.get('画像'))}`")
 
                     st.write("")
-                    st.caption("💡 行を選択（左端のラジオボタン）すると上のプレビューが切り替わります。")
-                    
-                    q_event = st.dataframe(
+                    st.caption("💡 行を選択（左端）すると上のプレビューが切り替わり、そのままセルを直接編集することも可能です。")
+
+                    # 選択機能付きの1つの統合エディタ（st.data_editor）
+                    edited_quiz = st.data_editor(
                         quiz_df,
                         on_select="rerun",
                         selection_mode="single-row",
-                        use_container_width=True,
-                        key="df_quiz_select"
-                    )
-
-                    if q_event and hasattr(q_event, "selection") and q_event.selection.get("rows"):
-                        sel_q_row_idx = q_event.selection["rows"][0]
-                        if sel_q_row_idx != st.session_state["selected_quiz_index"]:
-                            st.session_state["selected_quiz_index"] = sel_q_row_idx
-                            st.rerun()
-
-                    st.write("▼ **直接セルを編集する場合はこちら**")
-                    edited_quiz = st.data_editor(
-                        quiz_df,
                         num_rows="dynamic",
                         use_container_width=True,
-                        key="editor_quiz_data",
+                        key="unified_quiz_editor"
                     )
-                    
+
+                    if isinstance(edited_quiz, dict) and "selection" in edited_quiz:
+                        selected_q_rows = edited_quiz["selection"].get("rows", [])
+                        if selected_q_rows:
+                            sel_q_r = selected_q_rows[0]
+                            if sel_q_r != st.session_state["selected_quiz_index"]:
+                                st.session_state["selected_quiz_index"] = sel_q_r
+                                st.rerun()
+                        edited_quiz_df = edited_quiz.get("dataframe", quiz_df)
+                    else:
+                        edited_quiz_df = edited_quiz
+
                     buffer_quiz = io.BytesIO()
                     with pd.ExcelWriter(buffer_quiz, engine="openpyxl") as writer:
-                        edited_quiz.to_excel(writer, index=False)
+                        edited_quiz_df.to_excel(writer, index=False)
 
                     st.download_button(
                         label="📥 問題集データをExcel出力 (`quiz_data.xlsx`)",
