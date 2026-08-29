@@ -176,7 +176,7 @@ if st.session_state["current_nav"] == "ホーム":
 
     grid_imgs_html = ""
     if all_imgs:
-        sample_imgs = [random.choice(all_imgs) for _ in range(80)]
+        sample_imgs = [random.choice(all_imgs) for _ in range(120)]
         for img_path in sample_imgs:
             try:
                 with open(img_path, "rb") as f:
@@ -187,40 +187,40 @@ if st.session_state["current_nav"] == "ホーム":
             except Exception:
                 continue
 
-    banner_html = f"""
+    # ホーム全体のランダム画像背景＋囲み枠デザインCSS
+    home_style_html = f"""
     <style>
-    .wt100-container {{
+    .home-bg-container {{
         position: relative;
         width: 100%;
-        height: 480px;
-        border-radius: 16px;
+        min-height: 85vh;
+        border-radius: 20px;
         overflow: hidden;
         border: 2px solid #333;
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
         background-color: #0d0d0d;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        padding: 40px 20px;
         margin-bottom: 25px;
     }}
     
-    .mosaic-bg {{
+    .mosaic-bg-full {{
         position: absolute;
-        top: -50%;
+        top: -20%;
         left: 0;
         width: 100%;
-        height: 200%;
+        height: 150%;
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(95px, 1fr));
-        grid-auto-rows: 95px;
+        grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+        grid-auto-rows: 90px;
         gap: 3px;
-        opacity: 0.85;
-        animation: scroll-down 25s linear infinite;
+        opacity: 0.75;
+        animation: scroll-down 35s linear infinite;
+        z-index: 1;
     }}
 
     @keyframes scroll-down {{
         0% {{ transform: translateY(0); }}
-        100% {{ transform: translateY(25%); }}
+        100% {{ transform: translateY(20%); }}
     }}
     
     .bg-tile {{
@@ -229,84 +229,120 @@ if st.session_state["current_nav"] == "ホーム":
         object-fit: cover;
     }}
 
-    .center-overlay {{
+    .home-content {{
         position: relative;
         z-index: 2;
-        background: rgba(0, 0, 0, 0.4);
-        backdrop-filter: blur(3px);
-        padding: 40px 60px;
+        max-width: 850px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 20px;
+    }}
+
+    .banner-card {{
+        width: 100%;
+        background: rgba(0, 0, 0, 0.55);
+        backdrop-filter: blur(4px);
+        padding: 30px 40px;
         border-radius: 16px;
         border: 3px solid #ffcc00;
         text-align: center;
-        box-shadow: 0 0 30px rgba(255, 204, 0, 0.5), inset 0 0 15px rgba(0, 0, 0, 0.5);
-        max-width: 90%;
+        box-shadow: 0 0 30px rgba(255, 204, 0, 0.4), inset 0 0 15px rgba(0, 0, 0, 0.5);
     }}
     
-    .center-overlay h1 {{
-        margin: 0 0 10px 0;
-        font-size: 3rem;
+    .banner-card h1 {{
+        margin: 0 0 8px 0;
+        font-size: 2.8rem;
         color: #ffffff;
         font-weight: 900;
-        text-shadow: 3px 3px 6px #000000, -2px -2px 4px #000000;
+        text-shadow: 3px 3px 6px #000000;
         letter-spacing: 2px;
     }}
     
-    .center-overlay p {{
+    .banner-card p {{
         margin: 0;
         color: #ffcc00;
-        font-size: 1.4rem;
+        font-size: 1.3rem;
         font-weight: 700;
         text-shadow: 2px 2px 4px #000000;
         letter-spacing: 3px;
     }}
+
+    .menu-card-wrapper {{
+        width: 100%;
+        background: rgba(15, 15, 15, 0.85);
+        backdrop-filter: blur(6px);
+        padding: 25px 30px;
+        border-radius: 16px;
+        border: 2px solid #ffcc00;
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6);
+    }}
+
+    /* Streamlitボタンをカスタムカード風にするスタイリング */
+    div[data-testid="stColumn"] > div > div > button {{
+        background-color: rgba(20, 20, 20, 0.9) !important;
+        color: #ffffff !important;
+        border: 2px solid #ffcc00 !important;
+        border-radius: 12px !important;
+        padding: 16px 20px !important;
+        font-size: 1.25rem !important;
+        font-weight: 800 !important;
+        text-align: center !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
+        transition: all 0.2s ease-in-out !important;
+        margin-bottom: 12px !important;
+    }}
+
+    div[data-testid="stColumn"] > div > div > button:hover {{
+        background-color: #ffcc00 !important;
+        color: #000000 !important;
+        transform: translateY(-2px) !important;
+        box-shadow: 0 6px 20px rgba(255, 204, 0, 0.6) !important;
+    }}
     </style>
 
-    <div class="wt100-container">
-        <div class="mosaic-bg">
+    <div class="home-bg-container">
+        <div class="mosaic-bg-full">
             {grid_imgs_html if grid_imgs_html else '<div style="grid-column: 1/-1; text-align:center; color:#888; padding-top:200px;">（画像を追加すると背景に表示されます）</div>'}
         </div>
-        <div class="center-overlay">
-            <h1>🏴‍☠️ ONE PIECE ナレッジキング対策</h1>
-            <p>― 最強のデータベースを脳に刻め ―</p>
-        </div>
-    </div>
+        <div class="home-content">
+            <div class="banner-card">
+                <h1>🏴‍☠️ ONE PIECE ナレッジキング対策</h1>
+                <p>― 最強のデータベースを脳に刻め ―</p>
+            </div>
     """
 
-    st.markdown(banner_html, unsafe_allow_html=True)
+    st.markdown(home_style_html, unsafe_allow_html=True)
 
-    # --- ホーム上に配置された機能ナビゲーション ---
-    st.markdown("### 🧭 メニュー選択")
+    # モザイク背景の中に重なるコンテンツエリア
+    with st.container():
+        st.markdown('<div class="menu-card-wrapper">', unsafe_allow_html=True)
 
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        if st.button("📖 練習モード", use_container_width=True):
-            st.session_state["current_nav"] = "📖 練習モード"
-            st.rerun()
-    with c2:
-        if st.button("🏆 本番模試（50問/60分）", use_container_width=True):
-            st.session_state["current_nav"] = "🏆 本番模試（50問/60分）"
-            st.rerun()
-    with c3:
-        if st.button("🔥 苦手克服", use_container_width=True):
-            st.session_state["current_nav"] = "🔥 苦手克服"
-            st.rerun()
+        # 縦一列配列（指定順：模擬テスト、練習、苦手克服、検索、データ編集）
+        menu_items = [
+            ("🏆 本番模試（50問/60分）", "🏆 本番模試（50問/60分）"),
+            ("📖 練習モード", "📖 練習モード"),
+            ("🔥 苦手克服", "🔥 苦手克服"),
+            ("🔍 AI検索モード", "🔍 AI検索モード"),
+            ("➕ データ追加・編集", "➕ データ追加・編集"),
+        ]
 
-    st.write("")
-    c4, c5 = st.columns(2)
-    with c4:
-        if st.button("🔍 AI検索モード", use_container_width=True):
-            st.session_state["current_nav"] = "🔍 AI検索モード"
-            st.rerun()
-    with c5:
-        if st.button("➕ データ追加・編集", use_container_width=True):
-            st.session_state["current_nav"] = "➕ データ追加・編集"
-            st.rerun()
+        for label, target_nav in menu_items:
+            col = st.columns(1)[0]
+            with col:
+                if st.button(label, key=f"home_nav_{target_nav}", use_container_width=True):
+                    st.session_state["current_nav"] = target_nav
+                    st.rerun()
 
-    st.write("---")
-    if df_all.empty:
-        st.warning("現在、読み込めるExcelデータ（.xlsx）がありません。")
-    else:
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    st.markdown('</div></div>', unsafe_allow_html=True)
+
+    if not df_all.empty:
         st.info(f"📊 現在の登録データ総数: **{len(df_all)}** 件")
+    else:
+        st.warning("現在、読み込めるExcelデータ（.xlsx）がありません。")
 
 # --- ホーム戻る用共通ヘッダー ---
 else:
@@ -671,7 +707,7 @@ elif st.session_state["current_nav"] == "🔥 苦手克服":
     st.subheader("🔥 苦手克服モード")
     st.info("間違えた問題やチェックした問題を重点的に復習できます。")
 
-# --- 5. AI検索モード（図鑑＋選択画像表示機能） ---
+# --- 5. AI検索モード ---
 elif st.session_state["current_nav"] == "🔍 AI検索モード":
     st.title("🔍 AI検索モード")
     st.caption("〜 データベース爆速逆引き図鑑 〜")
@@ -729,7 +765,6 @@ elif st.session_state["current_nav"] == "🔍 AI検索モード":
                 ["👥 キャラクターマスター", "📝 問題集データ"]
             )
 
-            # 5-1. キャラクター検索タブ
             with tab_search1:
                 if char_search_df.empty:
                     st.caption("該当するキャラクターデータはありません。")
@@ -814,7 +849,6 @@ elif st.session_state["current_nav"] == "🔍 AI検索モード":
                             st.session_state["ai_selected_char_index"] = picked_r
                             st.rerun()
 
-            # 5-2. 問題集データ検索タブ
             with tab_search2:
                 if quiz_search_df.empty:
                     st.caption("該当する問題集データはありません。")
