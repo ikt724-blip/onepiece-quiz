@@ -12,7 +12,6 @@ import streamlit as st
 # --- データ読み込み用共通関数 ---
 @st.cache_data
 def load_all_data():
-    """リポジトリ内の全Excelファイルを統合して読み込む"""
     files = glob.glob("*.xlsx")
     if not files:
         return pd.DataFrame()
@@ -33,7 +32,6 @@ def load_all_data():
     return merged_df
 
 
-# 有効文字列判定ヘルパー
 def get_clean_str(val):
     if pd.isna(val) or val is None:
         return ""
@@ -43,7 +41,6 @@ def get_clean_str(val):
     return s
 
 
-# 画像表示ヘルパー関数
 def display_question_image(q_data, width=300, caption=None, show_caption=False):
     img_val = get_clean_str(q_data.get("image") or q_data.get("画像"))
     if not img_val:
@@ -69,7 +66,6 @@ def display_question_image(q_data, width=300, caption=None, show_caption=False):
     return False
 
 
-# 正解リスト抽出ヘルパー
 def get_correct_answers_list(q, correct_ans_str):
     answers = []
     for i in range(1, 10):
@@ -88,7 +84,6 @@ def get_correct_answers_list(q, correct_ans_str):
     return answers
 
 
-# 正解判定共通ロジック
 def check_answers_multi(user_inputs, correct_answers):
     user_clean = [str(u).strip() for u in user_inputs if str(u).strip()]
     correct_clean = [str(c).strip() for c in correct_answers if str(c).strip()]
@@ -99,7 +94,6 @@ def check_answers_multi(user_inputs, correct_answers):
     return set(user_clean) == set(correct_clean)
 
 
-# キャラマスターデータから問題文と正解を確定させるロジック
 def format_question_and_answer(q):
     raw_question = get_clean_str(
         q.get("question") or q.get("問題") or q.get("Question") or q.get("question_text")
@@ -151,6 +145,11 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
+# URLパラメータによるナビゲーション制御
+query_params = st.query_params
+if "nav" in query_params:
+    st.session_state["current_nav"] = query_params["nav"]
+
 if "current_nav" not in st.session_state:
     st.session_state["current_nav"] = "ホーム"
 
@@ -179,129 +178,144 @@ if st.session_state["current_nav"] == "ホーム":
             except Exception:
                 continue
 
-    # メインカード内に全要素（バナー＋モザイク＋ボタン群）を包含するスタイル
-    home_style_html = f"""
+    # 純粋なHTML/CSSでカードと縦アニメーションを完璧に描画
+    home_html = f"""
     <style>
+    @keyframes scroll-vertical {{
+        0% {{ transform: translateY(0); }}
+        100% {{ transform: translateY(-50%); }}
+    }}
+
     .main-card-container {{
         position: relative;
         width: 100%;
-        max-width: 900px;
-        margin: 0 auto 25px auto;
+        max-width: 800px;
+        margin: 0 auto 20px auto;
         border-radius: 20px;
         overflow: hidden;
         border: 2px solid #333;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-        background-color: #0d0d0d;
-        padding: 30px 20px;
-    }}
-    
-    .mosaic-bg-full {{
-        position: absolute;
-        top: -10%;
-        left: 0;
-        width: 100%;
-        height: 130%;
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
-        grid-auto-rows: 80px;
-        gap: 2px;
-        opacity: 0.7;
-        z-index: 1;
-    }}
-    
-    .bg-tile {{
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-    }}
-
-    .card-content {{
-        position: relative;
-        z-index: 2;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+        background-color: #121212;
+        padding: 24px;
         display: flex;
         flex-direction: column;
         gap: 20px;
     }}
 
-    .banner-card {{
+    /* 上部：画像アニメーション表示領域 */
+    .image-preview-box {{
+        position: relative;
         width: 100%;
-        background: rgba(0, 0, 0, 0.65);
-        backdrop-filter: blur(4px);
-        padding: 25px 20px;
+        height: 180px;
         border-radius: 14px;
-        border: 3px solid #ffcc00;
-        text-align: center;
-        box-shadow: 0 0 20px rgba(255, 204, 0, 0.3);
+        overflow: hidden;
+        border: 2px solid #ffcc00;
+        box-shadow: 0 0 15px rgba(255, 204, 0, 0.2);
     }}
-    
-    .banner-card h1 {{
-        margin: 0 0 6px 0;
-        font-size: 2.2rem;
+
+    .mosaic-bg-scroll {{
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        display: grid;
+        grid-template-columns: repeat(10, 1fr);
+        gap: 2px;
+        animation: scroll-vertical 25s linear infinite;
+    }}
+
+    .bg-tile {{
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        object-fit: cover;
+    }}
+
+    .banner-overlay {{
+        position: absolute;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.55);
+        backdrop-filter: blur(2px);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 10px;
+    }}
+
+    .banner-overlay h1 {{
+        margin: 0;
+        font-size: 2rem;
         color: #ffffff;
         font-weight: 900;
-        text-shadow: 2px 2px 5px #000;
+        text-shadow: 2px 2px 6px #000;
     }}
-    
-    .banner-card p {{
-        margin: 0;
+
+    .banner-overlay p {{
+        margin: 4px 0 0 0;
         color: #ffcc00;
-        font-size: 1.1rem;
+        font-size: 1rem;
         font-weight: 700;
         letter-spacing: 2px;
     }}
 
-    /* Streamlitのボタンを黒枠カード内に馴染ませるCSS */
-    div[data-testid="stColumn"] > div > div > button {{
-        background-color: rgba(255, 255, 255, 0.95) !important;
-        color: #111111 !important;
-        border: 1px solid #cccccc !important;
-        border-radius: 10px !important;
-        padding: 14px 20px !important;
-        font-size: 1.1rem !important;
-        font-weight: 700 !important;
-        text-align: center !important;
-        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3) !important;
-        transition: all 0.2s ease-in-out !important;
+    /* 下部：ボタン群 */
+    .button-container {{
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        width: 100%;
     }}
 
-    div[data-testid="stColumn"] > div > div > button:hover {{
-        background-color: #ffcc00 !important;
+    .nav-link-btn {{
+        display: block;
+        width: 100%;
+        padding: 14px;
+        background-color: #ffffff;
+        color: #111111 !important;
+        text-decoration: none !important;
+        text-align: center;
+        border-radius: 10px;
+        font-size: 1.1rem;
+        font-weight: 700;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        transition: all 0.2s ease-in-out;
+        box-sizing: border-box;
+    }}
+
+    .nav-link-btn:hover {{
+        background-color: #ffcc00;
         color: #000000 !important;
-        transform: translateY(-2px) !important;
-        box-shadow: 0 6px 15px rgba(255, 204, 0, 0.5) !important;
+        transform: translateY(-2px);
+        box-shadow: 0 6px 15px rgba(255, 204, 0, 0.4);
     }}
     </style>
 
     <div class="main-card-container">
-        <div class="mosaic-bg-full">
-            {grid_imgs_html if grid_imgs_html else '<div style="grid-column: 1/-1; text-align:center; color:#888; padding-top:100px;">（画像をimagesフォルダに入れると背景に表示されます）</div>'}
-        </div>
-        <div class="card-content">
-            <div class="banner-card">
+        <!-- アニメーション画像ヘッダー -->
+        <div class="image-preview-box">
+            <div class="mosaic-bg-scroll">
+                {grid_imgs_html if grid_imgs_html else '<div style="grid-column: 1/-1; text-align:center; color:#888; padding-top:70px;">（画像をimagesフォルダに入れると表示されます）</div>'}
+                {grid_imgs_html}
+            </div>
+            <div class="banner-overlay">
                 <h1>🏴‍☠️ ONE PIECE ナレッジキング対策</h1>
                 <p>― 最強のデータベースを脳に刻め ―</p>
             </div>
+        </div>
+
+        <!-- ボタン群（カード内） -->
+        <div class="button-container">
+            <a href="?nav=🏆 本番模試（50問/60分）" target="_self" class="nav-link-btn">🏆 本番模試（50問/60分）</a>
+            <a href="?nav=📖 練習モード" target="_self" class="nav-link-btn">💻 練習モード</a>
+            <a href="?nav=🔥 苦手克服" target="_self" class="nav-link-btn">🔥 苦手克服</a>
+            <a href="?nav=🔍 AI検索モード" target="_self" class="nav-link-btn">🔍 AI検索モード</a>
+            <a href="?nav=➕ データ追加・編集" target="_self" class="nav-link-btn">➕ データ追加・編集</a>
+        </div>
+    </div>
     """
 
-    st.markdown(home_style_html, unsafe_allow_html=True)
-
-    # 黒枠カードの中でボタンを縦一列に配置
-    menu_items = [
-        ("🏆 本番模試（50問/60分）", "🏆 本番模試（50問/60分）"),
-        ("💻 練習モード", "📖 練習モード"),
-        ("🔥 苦手克服", "🔥 苦手克服"),
-        ("🔍 AI検索モード", "🔍 AI検索モード"),
-        ("➕ データ追加・編集", "➕ データ追加・編集"),
-    ]
-
-    for label, target_nav in menu_items:
-        col = st.columns(1)[0]
-        with col:
-            if st.button(label, key=f"home_nav_{target_nav}", use_container_width=True):
-                st.session_state["current_nav"] = target_nav
-                st.rerun()
-
-    st.markdown('</div></div>', unsafe_allow_html=True)
+    st.markdown(home_html, unsafe_allow_html=True)
 
     if not df_all.empty:
         st.info(f"📊 現在の登録データ総数: **{len(df_all)}** 件")
@@ -314,6 +328,7 @@ else:
     with col_back:
         if st.button("🏠 ホームへ戻る", use_container_width=True):
             st.session_state["current_nav"] = "ホーム"
+            st.query_params.clear()
             st.rerun()
 
 # --- 2. 練習モード ---
