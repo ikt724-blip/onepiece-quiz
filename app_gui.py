@@ -145,11 +145,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# URLクエリパラメータからナビゲーションを取得
-query_params = st.query_params
-if "nav" in query_params:
-    st.session_state["current_nav"] = query_params["nav"]
-elif "current_nav" not in st.session_state:
+if "current_nav" not in st.session_state:
     st.session_state["current_nav"] = "ホーム"
 
 df_all = load_all_data()
@@ -166,7 +162,7 @@ if st.session_state["current_nav"] == "ホーム":
 
     grid_imgs_html = ""
     if all_imgs:
-        sample_imgs = [random.choice(all_imgs) for _ in range(120)]
+        sample_imgs = [random.choice(all_imgs) for _ in range(160)]
         for img_path in sample_imgs:
             try:
                 with open(img_path, "rb") as f:
@@ -177,142 +173,134 @@ if st.session_state["current_nav"] == "ホーム":
             except Exception:
                 continue
 
-    # 黒枠カードの中に「上部看板」と「ボタン群」を隙間なく配置する完璧なCSS
-    home_html = f"""
-    <style>
-    @keyframes scroll-vertical {{
-        0% {{ transform: translateY(0); }}
-        100% {{ transform: translateY(-50%); }}
-    }}
+    # 黒枠カード内に画像を敷き詰め、ボタンを「うっすら透ける半透明枠」で重ねるスタイル設定
+    st.markdown(
+        f"""
+        <style>
+        @keyframes scroll-vertical {{
+            0% {{ transform: translateY(0); }}
+            100% {{ transform: translateY(-50%); }}
+        }}
 
-    /* カード全体の黒枠コンテナ */
-    .hero-card {{
-        background-color: #0d0d0d;
-        border: 3px solid #222222;
-        border-radius: 20px;
-        padding: 20px;
-        max-width: 720px;
-        margin: 0 auto 20px auto;
-        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.8);
-        display: flex;
-        flex-direction: column;
-        gap: 16px;
-    }}
+        /* カード全体のメイン枠 */
+        .main-hero-box {{
+            position: relative;
+            max-width: 680px;
+            height: 520px;
+            margin: 0 auto 20px auto;
+            border: 3px solid #333;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+            background-color: #0d0d0d;
+        }}
 
-    /* 上部のアニメーション背景看板 */
-    .image-preview-box {{
-        position: relative;
-        width: 100%;
-        height: 160px;
-        border-radius: 12px;
-        overflow: hidden;
-        border: 2px solid #ffcc00;
-        box-shadow: 0 0 15px rgba(255, 204, 0, 0.25);
-    }}
+        /* 背景のアニメーション画像グリッド */
+        .mosaic-bg-scroll {{
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 2px;
+            animation: scroll-vertical 30s linear infinite;
+            opacity: 0.6;
+        }}
 
-    .mosaic-bg-scroll {{
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        display: grid;
-        grid-template-columns: repeat(10, 1fr);
-        gap: 2px;
-        animation: scroll-vertical 25s linear infinite;
-    }}
+        .bg-tile {{
+            width: 100%;
+            aspect-ratio: 1 / 1;
+            object-fit: cover;
+        }}
 
-    .bg-tile {{
-        width: 100%;
-        aspect-ratio: 1 / 1;
-        object-fit: cover;
-    }}
+        /* 全体を覆う暗めオーバーレイ */
+        .overlay-mask {{
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.45);
+            backdrop-filter: blur(1px);
+        }}
 
-    .banner-overlay {{
-        position: absolute;
-        inset: 0;
-        background: rgba(0, 0, 0, 0.55);
-        backdrop-filter: blur(2px);
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        text-align: center;
-        padding: 10px;
-    }}
+        /* Streamlitのボタン群を上に浮き上がらせる */
+        div[data-testid="stColumn"] {{
+            z-index: 10;
+        }}
 
-    .banner-overlay h1 {{
-        margin: 0;
-        font-size: 1.8rem;
-        color: #ffffff;
-        font-weight: 900;
-        text-shadow: 2px 2px 8px #000;
-    }}
+        /* ボタンの半透明枠・薄い塗りつぶしデザイン */
+        div.stButton > button {{
+            background-color: rgba(255, 255, 255, 0.15) !important;
+            color: #ffffff !important;
+            border: 1.5px solid rgba(255, 255, 255, 0.6) !important;
+            backdrop-filter: blur(8px) !important;
+            border-radius: 12px !important;
+            font-size: 1.05rem !important;
+            font-weight: 700 !important;
+            padding: 12px 0 !important;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3) !important;
+            transition: all 0.25s ease !important;
+        }}
 
-    .banner-overlay p {{
-        margin: 4px 0 0 0;
-        color: #ffcc00;
-        font-size: 0.95rem;
-        font-weight: 700;
-        letter-spacing: 2px;
-    }}
+        div.stButton > button:hover {{
+            background-color: rgba(255, 204, 0, 0.85) !important;
+            color: #000000 !important;
+            border-color: #ffcc00 !important;
+            box-shadow: 0 0 20px rgba(255, 204, 0, 0.8) !important;
+            transform: translateY(-2px);
+        }}
+        </style>
 
-    /* ボタンエリア（黒枠の中に直接配置） */
-    .button-group {{
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-    }}
-
-    .nav-link-btn {{
-        display: block;
-        width: 100%;
-        padding: 14px 0;
-        text-align: center;
-        background-color: #ffffff;
-        color: #111111;
-        font-size: 1.05rem;
-        font-weight: 800;
-        text-decoration: none !important;
-        border-radius: 10px;
-        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
-        transition: all 0.2s ease-in-out;
-        box-sizing: border-box;
-    }}
-
-    .nav-link-btn:hover {{
-        background-color: #ffcc00;
-        color: #000000;
-        transform: translateY(-2px);
-        box-shadow: 0 6px 16px rgba(255, 204, 0, 0.5);
-    }}
-    </style>
-
-    <div class="hero-card">
-        <!-- 上部ヘッダー（スクロール背景） -->
-        <div class="image-preview-box">
+        <div class="main-hero-box">
             <div class="mosaic-bg-scroll">
-                {grid_imgs_html if grid_imgs_html else '<div style="grid-column: 1/-1; text-align:center; color:#888; padding-top:60px;">（画像をimagesフォルダに入れると表示されます）</div>'}
+                {grid_imgs_html}
                 {grid_imgs_html}
             </div>
-            <div class="banner-overlay">
-                <h1>🏴‍☠️ ONE PIECE ナレッジキング対策</h1>
-                <p>― 最強のデータベースを脳に刻め ―</p>
+            <div class="overlay-mask"></div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # 画面上の位置調整（背景枠の上に配置）
+    st.markdown('<div style="margin-top: -500px;"></div>', unsafe_allow_html=True)
+
+    # タイトル領域
+    _, center_col, _ = st.columns([1, 10, 1])
+    with center_col:
+        st.markdown(
+            """
+            <div style="text-align: center; margin-bottom: 25px;">
+                <h1 style="color: #ffffff; margin: 0; font-size: 1.8rem; text-shadow: 2px 2px 8px #000;">🏴‍☠️ ONE PIECE ナレッジキング対策</h1>
+                <p style="color: #ffcc00; margin: 5px 0 0 0; font-weight: bold; letter-spacing: 1px; text-shadow: 1px 1px 4px #000;">― 最強のデータベースを脳に刻め ―</p>
             </div>
-        </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
-        <!-- ボタン群（カード内部に直接内包） -->
-        <div class="button-group">
-            <a href="?nav=🏆 本番模試（50問/60分）" target="_self" class="nav-link-btn">🏆 本番模試（50問/60分）</a>
-            <a href="?nav=📖 練習モード" target="_self" class="nav-link-btn">💻 練習モード</a>
-            <a href="?nav=🔥 苦手克服" target="_self" class="nav-link-btn">🔥 苦手克服</a>
-            <a href="?nav=🔍 AI検索モード" target="_self" class="nav-link-btn">🔍 AI検索モード</a>
-            <a href="?nav=➕ データ追加・編集" target="_self" class="nav-link-btn">➕ データ追加・編集</a>
-        </div>
-    </div>
-    """
-    st.markdown(home_html, unsafe_allow_html=True)
+        # 薄く透ける枠付きボタン群
+        if st.button("🏆 本番模試（50問/60分）", use_container_width=True):
+            st.session_state["current_nav"] = "🏆 本番模試（50問/60分）"
+            st.rerun()
 
-    st.write("")
+        if st.button("💻 練習モード", use_container_width=True):
+            st.session_state["current_nav"] = "📖 練習モード"
+            st.rerun()
+
+        if st.button("🔥 苦手克服", use_container_width=True):
+            st.session_state["current_nav"] = "🔥 苦手克服"
+            st.rerun()
+
+        if st.button("🔍 AI検索モード", use_container_width=True):
+            st.session_state["current_nav"] = "🔍 AI検索モード"
+            st.rerun()
+
+        if st.button("➕ データ追加・編集", use_container_width=True):
+            st.session_state["current_nav"] = "➕ データ追加・編集"
+            st.rerun()
+
+    # マージン復帰
+    st.markdown('<div style="margin-top: 40px;"></div>', unsafe_allow_html=True)
+
     if not df_all.empty:
         st.info(f"📊 現在の登録データ総数: **{len(df_all)}** 件")
     else:
@@ -323,7 +311,6 @@ else:
     col_back, col_title = st.columns([1, 5])
     with col_back:
         if st.button("🏠 ホームへ戻る", use_container_width=True):
-            st.query_params.clear()
             st.session_state["current_nav"] = "ホーム"
             st.rerun()
 
