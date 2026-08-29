@@ -1,6 +1,5 @@
 import glob
 import io
-import math
 import os
 import random
 import re
@@ -8,7 +7,6 @@ import time
 import base64
 import pandas as pd
 import streamlit as st
-from PIL import Image
 
 
 # --- データ読み込み用共通関数 ---
@@ -37,7 +35,6 @@ def load_all_data():
 
 # 有効文字列判定ヘルパー
 def get_clean_str(val):
-    """NaNやNone、空文字を排除して正しい文字列を返す"""
     if pd.isna(val) or val is None:
         return ""
     s = str(val).strip()
@@ -46,9 +43,8 @@ def get_clean_str(val):
     return s
 
 
-# 画像表示ヘルパー関数（URL・ローカルパス両対応）
+# 画像表示ヘルパー関数
 def display_question_image(q_data, width=300, caption=None, show_caption=False):
-    """画像パスまたはURLを探して表示する関数"""
     img_val = get_clean_str(q_data.get("image") or q_data.get("画像"))
     if not img_val:
         st.caption("📷 画像データなし")
@@ -75,7 +71,6 @@ def display_question_image(q_data, width=300, caption=None, show_caption=False):
 
 # 正解リスト抽出ヘルパー
 def get_correct_answers_list(q, correct_ans_str):
-    """問題データから正解の要素リストを取得する"""
     answers = []
     for i in range(1, 10):
         val = get_clean_str(q.get(f"answer_{i}"))
@@ -95,7 +90,6 @@ def get_correct_answers_list(q, correct_ans_str):
 
 # 正解判定共通ロジック
 def check_answers_multi(user_inputs, correct_answers):
-    """複数入力された回答と正解リストを順不同で照合"""
     user_clean = [str(u).strip() for u in user_inputs if str(u).strip()]
     correct_clean = [str(c).strip() for c in correct_answers if str(c).strip()]
 
@@ -157,14 +151,12 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# 画面切り替え用の状態初期化
 if "current_nav" not in st.session_state:
     st.session_state["current_nav"] = "ホーム"
 
-# 全データ取得
 df_all = load_all_data()
 
-# --- 1. ホーム画面（メインポータル） ---
+# --- 1. ホーム画面 ---
 if st.session_state["current_nav"] == "ホーム":
     all_imgs = (
         glob.glob("images/*.png")
@@ -187,40 +179,34 @@ if st.session_state["current_nav"] == "ホーム":
             except Exception:
                 continue
 
-    # ホーム全体のランダム画像背景＋囲み枠デザインCSS
+    # メインカード内に全要素（バナー＋モザイク＋ボタン群）を包含するスタイル
     home_style_html = f"""
     <style>
-    .home-bg-container {{
+    .main-card-container {{
         position: relative;
         width: 100%;
-        min-height: 85vh;
+        max-width: 900px;
+        margin: 0 auto 25px auto;
         border-radius: 20px;
         overflow: hidden;
         border: 2px solid #333;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
         background-color: #0d0d0d;
-        padding: 40px 20px;
-        margin-bottom: 25px;
+        padding: 30px 20px;
     }}
     
     .mosaic-bg-full {{
         position: absolute;
-        top: -20%;
+        top: -10%;
         left: 0;
         width: 100%;
-        height: 150%;
+        height: 130%;
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
-        grid-auto-rows: 90px;
-        gap: 3px;
-        opacity: 0.75;
-        animation: scroll-down 35s linear infinite;
+        grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+        grid-auto-rows: 80px;
+        gap: 2px;
+        opacity: 0.7;
         z-index: 1;
-    }}
-
-    @keyframes scroll-down {{
-        0% {{ transform: translateY(0); }}
-        100% {{ transform: translateY(20%); }}
     }}
     
     .bg-tile {{
@@ -229,84 +215,68 @@ if st.session_state["current_nav"] == "ホーム":
         object-fit: cover;
     }}
 
-    .home-content {{
+    .card-content {{
         position: relative;
         z-index: 2;
-        max-width: 850px;
-        margin: 0 auto;
         display: flex;
         flex-direction: column;
-        align-items: center;
         gap: 20px;
     }}
 
     .banner-card {{
         width: 100%;
-        background: rgba(0, 0, 0, 0.55);
+        background: rgba(0, 0, 0, 0.65);
         backdrop-filter: blur(4px);
-        padding: 30px 40px;
-        border-radius: 16px;
+        padding: 25px 20px;
+        border-radius: 14px;
         border: 3px solid #ffcc00;
         text-align: center;
-        box-shadow: 0 0 30px rgba(255, 204, 0, 0.4), inset 0 0 15px rgba(0, 0, 0, 0.5);
+        box-shadow: 0 0 20px rgba(255, 204, 0, 0.3);
     }}
     
     .banner-card h1 {{
-        margin: 0 0 8px 0;
-        font-size: 2.8rem;
+        margin: 0 0 6px 0;
+        font-size: 2.2rem;
         color: #ffffff;
         font-weight: 900;
-        text-shadow: 3px 3px 6px #000000;
-        letter-spacing: 2px;
+        text-shadow: 2px 2px 5px #000;
     }}
     
     .banner-card p {{
         margin: 0;
         color: #ffcc00;
-        font-size: 1.3rem;
+        font-size: 1.1rem;
         font-weight: 700;
-        text-shadow: 2px 2px 4px #000000;
-        letter-spacing: 3px;
+        letter-spacing: 2px;
     }}
 
-    .menu-card-wrapper {{
-        width: 100%;
-        background: rgba(15, 15, 15, 0.85);
-        backdrop-filter: blur(6px);
-        padding: 25px 30px;
-        border-radius: 16px;
-        border: 2px solid #ffcc00;
-        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6);
-    }}
-
-    /* Streamlitボタンをカスタムカード風にするスタイリング */
+    /* Streamlitのボタンを黒枠カード内に馴染ませるCSS */
     div[data-testid="stColumn"] > div > div > button {{
-        background-color: rgba(20, 20, 20, 0.9) !important;
-        color: #ffffff !important;
-        border: 2px solid #ffcc00 !important;
-        border-radius: 12px !important;
-        padding: 16px 20px !important;
-        font-size: 1.25rem !important;
-        font-weight: 800 !important;
+        background-color: rgba(255, 255, 255, 0.95) !important;
+        color: #111111 !important;
+        border: 1px solid #cccccc !important;
+        border-radius: 10px !important;
+        padding: 14px 20px !important;
+        font-size: 1.1rem !important;
+        font-weight: 700 !important;
         text-align: center !important;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3) !important;
         transition: all 0.2s ease-in-out !important;
-        margin-bottom: 12px !important;
     }}
 
     div[data-testid="stColumn"] > div > div > button:hover {{
         background-color: #ffcc00 !important;
         color: #000000 !important;
         transform: translateY(-2px) !important;
-        box-shadow: 0 6px 20px rgba(255, 204, 0, 0.6) !important;
+        box-shadow: 0 6px 15px rgba(255, 204, 0, 0.5) !important;
     }}
     </style>
 
-    <div class="home-bg-container">
+    <div class="main-card-container">
         <div class="mosaic-bg-full">
-            {grid_imgs_html if grid_imgs_html else '<div style="grid-column: 1/-1; text-align:center; color:#888; padding-top:200px;">（画像を追加すると背景に表示されます）</div>'}
+            {grid_imgs_html if grid_imgs_html else '<div style="grid-column: 1/-1; text-align:center; color:#888; padding-top:100px;">（画像をimagesフォルダに入れると背景に表示されます）</div>'}
         </div>
-        <div class="home-content">
+        <div class="card-content">
             <div class="banner-card">
                 <h1>🏴‍☠️ ONE PIECE ナレッジキング対策</h1>
                 <p>― 最強のデータベースを脳に刻め ―</p>
@@ -315,27 +285,21 @@ if st.session_state["current_nav"] == "ホーム":
 
     st.markdown(home_style_html, unsafe_allow_html=True)
 
-    # モザイク背景の中に重なるコンテンツエリア
-    with st.container():
-        st.markdown('<div class="menu-card-wrapper">', unsafe_allow_html=True)
+    # 黒枠カードの中でボタンを縦一列に配置
+    menu_items = [
+        ("🏆 本番模試（50問/60分）", "🏆 本番模試（50問/60分）"),
+        ("💻 練習モード", "📖 練習モード"),
+        ("🔥 苦手克服", "🔥 苦手克服"),
+        ("🔍 AI検索モード", "🔍 AI検索モード"),
+        ("➕ データ追加・編集", "➕ データ追加・編集"),
+    ]
 
-        # 縦一列配列（指定順：模擬テスト、練習、苦手克服、検索、データ編集）
-        menu_items = [
-            ("🏆 本番模試（50問/60分）", "🏆 本番模試（50問/60分）"),
-            ("📖 練習モード", "📖 練習モード"),
-            ("🔥 苦手克服", "🔥 苦手克服"),
-            ("🔍 AI検索モード", "🔍 AI検索モード"),
-            ("➕ データ追加・編集", "➕ データ追加・編集"),
-        ]
-
-        for label, target_nav in menu_items:
-            col = st.columns(1)[0]
-            with col:
-                if st.button(label, key=f"home_nav_{target_nav}", use_container_width=True):
-                    st.session_state["current_nav"] = target_nav
-                    st.rerun()
-
-        st.markdown('</div>', unsafe_allow_html=True)
+    for label, target_nav in menu_items:
+        col = st.columns(1)[0]
+        with col:
+            if st.button(label, key=f"home_nav_{target_nav}", use_container_width=True):
+                st.session_state["current_nav"] = target_nav
+                st.rerun()
 
     st.markdown('</div></div>', unsafe_allow_html=True)
 
@@ -558,9 +522,6 @@ elif st.session_state["current_nav"] == "🏆 本番模試（50問/60分）":
         if not st.session_state.exam_started:
             st.info(
                 "全データからランダムで **50問** 出題されます。制限時間は **60分** です。"
-            )
-            st.write(
-                "※本番同様、テスト挑戦中は途中で正解が表示されません。最後に総合結果が出力されます。"
             )
 
             if st.button("🔥 模試を開始する（タイマースタート）", use_container_width=True):
@@ -823,31 +784,13 @@ elif st.session_state["current_nav"] == "🔍 AI検索モード":
                             f"**画像ファイル名/URL:** `{get_clean_str(sel_row.get('image') or sel_row.get('画像'))}`"
                         )
 
-                    st.write("")
-                    st.caption(
-                        "💡 一覧表の行を選択（ラジオボタン）すると、上の詳細画像が切り替わります。"
-                    )
-
-                    ai_char_event = st.dataframe(
+                    st.dataframe(
                         char_search_df,
                         on_select="rerun",
                         selection_mode="single-row",
                         use_container_width=True,
                         key="df_ai_char_select",
                     )
-
-                    if (
-                        ai_char_event
-                        and hasattr(ai_char_event, "selection")
-                        and ai_char_event.selection.get("rows")
-                    ):
-                        picked_r = ai_char_event.selection["rows"][0]
-                        if (
-                            picked_r
-                            != st.session_state["ai_selected_char_index"]
-                        ):
-                            st.session_state["ai_selected_char_index"] = picked_r
-                            st.rerun()
 
             with tab_search2:
                 if quiz_search_df.empty:
@@ -879,31 +822,13 @@ elif st.session_state["current_nav"] == "🔍 AI検索モード":
                             f"**画像ファイル名/URL:** `{get_clean_str(sel_q_row.get('image') or sel_q_row.get('画像'))}`"
                         )
 
-                    st.write("")
-                    st.caption(
-                        "💡 一覧表の行を選択すると、プレビューが切り替わります。"
-                    )
-
-                    ai_quiz_event = st.dataframe(
+                    st.dataframe(
                         quiz_search_df,
                         on_select="rerun",
                         selection_mode="single-row",
                         use_container_width=True,
                         key="df_ai_quiz_select",
                     )
-
-                    if (
-                        ai_quiz_event
-                        and hasattr(ai_quiz_event, "selection")
-                        and ai_quiz_event.selection.get("rows")
-                    ):
-                        picked_q = ai_quiz_event.selection["rows"][0]
-                        if (
-                            picked_q
-                            != st.session_state["ai_selected_quiz_index"]
-                        ):
-                            st.session_state["ai_selected_quiz_index"] = picked_q
-                            st.rerun()
 
 # --- 6. データ追加・編集モード ---
 elif st.session_state["current_nav"] == "➕ データ追加・編集":
@@ -986,13 +911,8 @@ elif st.session_state["current_nav"] == "➕ データ追加・編集":
                         )
                         ans_inputs.append(ans_val)
 
-                exp_text = st.text_area(
-                    "解説・関連情報",
-                    placeholder="例：ルフィ、バギー、シャンクス、ティーチの4名。",
-                )
-                genre = st.text_input(
-                    "ジャンル/関連エピソード", placeholder="例：ワノ国編後 / 懸賞金"
-                )
+                exp_text = st.text_area("解説・関連情報")
+                genre = st.text_input("ジャンル/関連エピソード")
 
                 if st.form_submit_button("記述問題を追加"):
                     valid_answers = [
@@ -1016,39 +936,22 @@ elif st.session_state["current_nav"] == "➕ データ追加・編集":
                             [st.session_state["added_data"], new_row],
                             ignore_index=True,
                         )
-                        st.success(
-                            "記述問題を一時追加しました！「2. データの編集」タブで確認できます。"
-                        )
-                    else:
-                        st.error("問題文と少なくとも1つの正解を入力してください。")
+                        st.success("記述問題を一時追加しました！")
 
         with sub_add_tab3:
             st.markdown("##### 並び替えクイズの追加")
             with st.form("sort_form", clear_on_submit=True):
-                sq_text = st.text_area(
-                    "問題文",
-                    placeholder="例：次の出来事を発生した順に並び替えよ。",
-                )
+                sq_text = st.text_area("問題文")
                 col1, col2 = st.columns(2)
                 with col1:
-                    opt1 = st.text_input(
-                        "選択肢 1 (●)", placeholder="例：アラバスタ王国脱出"
-                    )
-                    opt2 = st.text_input(
-                        "選択肢 2 (△)", placeholder="例：ドラム王国脱出"
-                    )
+                    opt1 = st.text_input("選択肢 1 (●)")
+                    opt2 = st.text_input("選択肢 2 (△)")
                 with col2:
-                    opt3 = st.text_input(
-                        "選択肢 3 (□)", placeholder="例：ローグタウン脱出"
-                    )
-                    opt4 = st.text_input(
-                        "選択肢 4 (×)", placeholder="例：空島脱出"
-                    )
+                    opt3 = st.text_input("選択肢 3 (□)")
+                    opt4 = st.text_input("選択肢 4 (×)")
 
-                s_answer = st.text_input(
-                    "正解の順序（番号で指定）", placeholder="例：3214"
-                )
-                s_exp = st.text_area("解説", placeholder="時系列の補足などを記入")
+                s_answer = st.text_input("正解の順序（番号で指定）")
+                s_exp = st.text_area("解説")
 
                 if st.form_submit_button("並び替え問題を追加"):
                     if sq_text and s_answer and opt1 and opt2:
@@ -1067,11 +970,7 @@ elif st.session_state["current_nav"] == "➕ データ追加・編集":
                             [st.session_state["added_data"], new_row],
                             ignore_index=True,
                         )
-                        st.success(
-                            "並び替え問題を一時追加しました！「2. データの編集」タブで確認できます。"
-                        )
-                    else:
-                        st.error("必要な項目を入力してください。")
+                        st.success("並び替え問題を一時追加しました！")
 
     elif tab_selection == "✏️ 2. データの編集":
         st.subheader("✏️ データの確認・画像チェック・リアルタイム編集")
@@ -1089,9 +988,7 @@ elif st.session_state["current_nav"] == "➕ データ追加・編集":
             [df_all, st.session_state["added_data"]], ignore_index=True
         )
 
-        if target_data.empty:
-            st.info("現在表示・編集できるデータがありません。")
-        else:
+        if not target_data.empty:
             if filter_kw:
                 mask = (
                     target_data.astype(str)
@@ -1131,179 +1028,18 @@ elif st.session_state["current_nav"] == "➕ データ追加・編集":
 
             with sub_edit_tab1:
                 st.markdown("##### 👥 キャラクターマスター 一覧・編集")
-                if char_df.empty:
-                    st.caption("該当するキャラクターデータはありません。")
-                else:
-                    if "selected_char_index" not in st.session_state:
-                        st.session_state["selected_char_index"] = 0
-
-                    btn_cols = st.columns(min(len(char_df), 6))
-                    for i, row in char_df.head(6).iterrows():
-                        c_name = (
-                            get_clean_str(row.get("name") or row.get("名前"))
-                            or f"キャラ{i+1}"
-                        )
-                        with btn_cols[i % 6]:
-                            if st.button(
-                                f"👤 {c_name}",
-                                key=f"btn_char_single_{i}",
-                                use_container_width=True,
-                            ):
-                                st.session_state["selected_char_index"] = i
-                                st.rerun()
-
-                    curr_char_idx = min(
-                        st.session_state["selected_char_index"], len(char_df) - 1
-                    )
-                    sel_row = char_df.iloc[curr_char_idx]
-                    char_label = get_clean_str(
-                        sel_row.get("name") or sel_row.get("名前")
-                    )
-                    char_id = get_clean_str(sel_row.get("characterid"))
-
-                    st.info(
-                        f"📌 選択中のキャラクター: **{char_label}** {f'(ID: {char_id})' if char_id else ''}"
-                    )
-                    p_col1, p_col2 = st.columns([1, 2])
-                    with p_col1:
-                        display_question_image(
-                            sel_row, width=280, show_caption=True
-                        )
-                    with p_col2:
-                        st.write(
-                            f"**異名/通り名:** {get_clean_str(sel_row.get('nickname') or sel_row.get('異名')) or 'なし'}"
-                        )
-                        st.write(
-                            f"**悪魔の実:** {get_clean_str(sel_row.get('devil_fruit') or sel_row.get('悪魔の実')) or 'なし'}"
-                        )
-                        st.write(
-                            f"**系統/種類:** {get_clean_str(sel_row.get('fruit_type')) or 'なし'}"
-                        )
-                        st.write(
-                            f"**所属/組織:** {get_clean_str(sel_row.get('affiliation') or sel_row.get('所属')) or 'なし'}"
-                        )
-                        st.write(
-                            f"**画像ファイル名/URL:** `{get_clean_str(sel_row.get('image') or sel_row.get('画像'))}`"
-                        )
-
-                    st.write("")
-                    st.caption(
-                        "💡 一覧表の左端ラジオボタンで行を選択すると、上の画像が切り替わります。"
-                    )
-
-                    char_event = st.dataframe(
+                if not char_df.empty:
+                    st.dataframe(
                         char_df,
-                        on_select="rerun",
-                        selection_mode="single-row",
                         use_container_width=True,
-                        key="df_char_select",
+                        key="df_char_edit",
                     )
-
-                    if (
-                        char_event
-                        and hasattr(char_event, "selection")
-                        and char_event.selection.get("rows")
-                    ):
-                        sel_r = char_event.selection["rows"][0]
-                        if sel_r != st.session_state["selected_char_index"]:
-                            st.session_state["selected_char_index"] = sel_r
-                            st.rerun()
-
-                    with st.expander("🛠️ データを直接編集する（セル編集・行の追加削除）"):
-                        edited_char = st.data_editor(
-                            char_df,
-                            num_rows="dynamic",
-                            use_container_width=True,
-                            key="editor_char_data",
-                        )
-
-                        buffer_char = io.BytesIO()
-                        with pd.ExcelWriter(buffer_char, engine="openpyxl") as writer:
-                            edited_char.to_excel(writer, index=False)
-
-                        st.download_button(
-                            label="📥 キャラクターマスターをExcel出力 (`character_master.xlsx`)",
-                            data=buffer_char.getvalue(),
-                            file_name="character_master.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        )
 
             with sub_edit_tab2:
                 st.markdown("##### 📝 記述・並び替え問題集 一覧・編集")
-                if quiz_df.empty:
-                    st.caption("該当する問題集データはありません。")
-                else:
-                    if "selected_quiz_index" not in st.session_state:
-                        st.session_state["selected_quiz_index"] = 0
-
-                    curr_q_idx = min(
-                        st.session_state["selected_quiz_index"], len(quiz_df) - 1
-                    )
-                    sel_q_row = quiz_df.iloc[curr_q_idx]
-                    q_t, c_a = format_question_and_answer(sel_q_row)
-
-                    st.info(f"📌 選択中の問題: **第 {curr_q_idx + 1} 問**")
-                    qp_col1, qp_col2 = st.columns([1, 2])
-                    with qp_col1:
-                        display_question_image(
-                            sel_q_row, width=280, show_caption=True
-                        )
-                    with qp_col2:
-                        st.write(f"**問題文:** {q_t}")
-                        st.write(f"**正解:** {c_a}")
-                        st.write(
-                            f"**解説:** {get_clean_str(sel_q_row.get('explanation') or sel_q_row.get('解説')) or 'なし'}"
-                        )
-                        st.write(
-                            f"**画像ファイル名/URL:** `{get_clean_str(sel_q_row.get('image') or sel_q_row.get('画像'))}`"
-                        )
-
-                    st.write("")
-                    st.caption(
-                        "💡 一覧表の左端ラジオボタンで行を選択すると、上のプレビューが切り替わります。"
-                    )
-
-                    quiz_event = st.dataframe(
+                if not quiz_df.empty:
+                    st.dataframe(
                         quiz_df,
-                        on_select="rerun",
-                        selection_mode="single-row",
                         use_container_width=True,
-                        key="df_quiz_select",
+                        key="df_quiz_edit",
                     )
-
-                    if (
-                        quiz_event
-                        and hasattr(quiz_event, "selection")
-                        and quiz_event.selection.get("rows")
-                    ):
-                        sel_q_r = quiz_event.selection["rows"][0]
-                        if sel_q_r != st.session_state["selected_quiz_index"]:
-                            st.session_state["selected_quiz_index"] = sel_q_r
-                            st.rerun()
-
-                    with st.expander("🛠️ データを直接編集する（セル編集・行の追加削除）"):
-                        edited_quiz = st.data_editor(
-                            quiz_df,
-                            num_rows="dynamic",
-                            use_container_width=True,
-                            key="editor_quiz_data",
-                        )
-
-                        buffer_quiz = io.BytesIO()
-                        with pd.ExcelWriter(buffer_quiz, engine="openpyxl") as writer:
-                            edited_quiz.to_excel(writer, index=False)
-
-                        st.download_button(
-                            label="📥 問題集データをExcel出力 (`quiz_data.xlsx`)",
-                            data=buffer_quiz.getvalue(),
-                            file_name="quiz_data.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        )
-
-            st.write("")
-            if st.button("🔄 一時追加データ・検索フィルターをリセット"):
-                st.session_state["added_data"] = pd.DataFrame()
-                st.session_state["edit_search_keyword"] = ""
-                st.session_state["selected_char_index"] = 0
-                st.session_state["selected_quiz_index"] = 0
-                st.rerun()
