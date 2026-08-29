@@ -137,6 +137,20 @@ def format_question_and_answer(q):
     return "このキャラクターの名前は？", name
 
 
+def save_df_to_excel(df):
+    """データフレームを元のソースファイル単位でExcelに上書き保存する"""
+    if "source_file" not in df.columns:
+        df["source_file"] = "data_master.xlsx"
+    
+    # ソースファイルごとに分割して保存
+    grouped = df.groupby("source_file")
+    for file_name, group in grouped:
+        clean_group = group.drop(columns=["source_file"], errors="ignore")
+        clean_group.to_excel(file_name, index=False)
+    
+    st.cache_data.clear()
+
+
 # --- ページ基本設定 ---
 st.set_page_config(
     page_title="ONE PIECE ナレッジキング対策",
@@ -173,7 +187,6 @@ if st.session_state["current_nav"] == "ホーム":
             except Exception:
                 continue
 
-    # 黒枠カード内に画像を敷き詰め、ボタンを「うっすら透ける半透明枠」で重ねるスタイル設定
     st.markdown(
         f"""
         <style>
@@ -182,7 +195,6 @@ if st.session_state["current_nav"] == "ホーム":
             100% {{ transform: translateY(-50%); }}
         }}
 
-        /* カード全体のメイン枠 */
         .main-hero-box {{
             position: relative;
             max-width: 680px;
@@ -195,7 +207,6 @@ if st.session_state["current_nav"] == "ホーム":
             background-color: #0d0d0d;
         }}
 
-        /* 背景のアニメーション画像グリッド */
         .mosaic-bg-scroll {{
             position: absolute;
             top: 0;
@@ -214,7 +225,6 @@ if st.session_state["current_nav"] == "ホーム":
             object-fit: cover;
         }}
 
-        /* 全体を覆う暗めオーバーレイ */
         .overlay-mask {{
             position: absolute;
             inset: 0;
@@ -222,12 +232,10 @@ if st.session_state["current_nav"] == "ホーム":
             backdrop-filter: blur(1px);
         }}
 
-        /* Streamlitのボタン群を上に浮き上がらせる */
         div[data-testid="stColumn"] {{
             z-index: 10;
         }}
 
-        /* ボタンの半透明枠・薄い塗りつぶしデザイン */
         div.stButton > button {{
             background-color: rgba(255, 255, 255, 0.15) !important;
             color: #ffffff !important;
@@ -261,10 +269,8 @@ if st.session_state["current_nav"] == "ホーム":
         unsafe_allow_html=True,
     )
 
-    # 画面上の位置調整（背景枠の上に配置）
     st.markdown('<div style="margin-top: -500px;"></div>', unsafe_allow_html=True)
 
-    # タイトル領域
     _, center_col, _ = st.columns([1, 10, 1])
     with center_col:
         st.markdown(
@@ -277,7 +283,6 @@ if st.session_state["current_nav"] == "ホーム":
             unsafe_allow_html=True,
         )
 
-        # 薄く透ける枠付きボタン群
         if st.button("🏆 本番模試（50問/60分）", use_container_width=True):
             st.session_state["current_nav"] = "🏆 本番模試（50問/60分）"
             st.rerun()
@@ -298,7 +303,6 @@ if st.session_state["current_nav"] == "ホーム":
             st.session_state["current_nav"] = "➕ データ追加・編集"
             st.rerun()
 
-    # マージン復帰
     st.markdown('<div style="margin-top: 40px;"></div>', unsafe_allow_html=True)
 
     if not df_all.empty:
@@ -404,8 +408,6 @@ if st.session_state["current_nav"] == "📖 練習モード":
 
                         st.session_state["edit_search_keyword"] = target_kw
                         st.session_state["edit_active_tab"] = 1
-                        st.session_state["selected_char_index"] = 0
-                        st.session_state["selected_quiz_index"] = 0
                         st.session_state["current_nav"] = "➕ データ追加・編集"
                         st.rerun()
 
@@ -982,6 +984,7 @@ elif st.session_state["current_nav"] == "➕ データ追加・編集":
         )
         st.session_state["edit_search_keyword"] = filter_kw
 
+        # 既存データと新規追加分を結合
         target_data = pd.concat(
             [df_all, st.session_state["added_data"]], ignore_index=True
         )
@@ -1025,19 +1028,112 @@ elif st.session_state["current_nav"] == "➕ データ追加・編集":
             )
 
             with sub_edit_tab1:
-                st.markdown("##### 👥 キャラクターマスター 一覧・編集")
-                if not char_df.empty:
-                    st.dataframe(
+                st.markdown("##### 👥 キャラクターマスター 一覧・個別編集")
+                if char_df.empty:
+                    st.caption("対象となるキャラクターデータがありません。")
+                else:
+                    event = st.dataframe(
                         char_df,
+                        on_select="rerun",
+                        selection_mode="single-row",
                         use_container_width=True,
                         key="df_char_edit",
                     )
 
+                    selected_rows = event.selection.rows if event else []
+                    selected_idx = selected_rows[0] if selected_rows else 0
+                    
+                    if 0 <= selected_idx < len(char_df):
+                        selected_row = char_df.iloc[selected_idx]
+                        
+                        st.markdown("---")
+                        st.markdown(f"#### 🛠️ 選択中のデータ修正 ({get_clean_str(selected_row.get('name')) or 'キャラ'})")
+                        
+                        c_col1, c_col2 = st.columns([1, 2])
+                        with c_col1:
+                            st.caption("【現在の画像プレビュー】")
+                            display_question_image(selected_row, width=220, show_caption=True)
+                        
+                        with c_col2:
+                            with st.form(f"edit_char_form_{selected_idx}"):
+                                edited_vals = {}
+                                for col in char_df.columns:
+                                    if col == "source_file":
+                                        continue
+                                    orig_val = get_clean_str(selected_row.get(col))
+                                    edited_vals[col] = st.text_input(f"{col}", value=orig_val, key=f"c_edit_{selected_idx}_{col}")
+                                
+                                if st.form_submit_button("💾 この変更をExcelファイルに上書き保存", use_container_width=True):
+                                    # 元データフレーム(df_all)の対応行を更新
+                                    match_mask = True
+                                    for key_col in ["characterid", "name", "image"]:
+                                        if key_col in selected_row and pd.notna(selected_row[key_col]):
+                                            match_mask = match_mask & (df_all[key_col] == selected_row[key_col])
+                                    
+                                    matched_indices = df_all[match_mask].index
+                                    if len(matched_indices) > 0:
+                                        target_index = matched_indices[0]
+                                        for k, v in edited_vals.items():
+                                            if k in df_all.columns:
+                                                df_all.at[target_index, k] = v
+                                        save_df_to_excel(df_all)
+                                        st.success("✅ データがExcelファイルに上書き保存されました！")
+                                        st.rerun()
+                                    else:
+                                        st.error("⚠️ 更新対象の元データが見つかりませんでした。")
+
             with sub_edit_tab2:
-                st.markdown("##### 📝 記述・並び替え問題集 一覧・編集")
-                if not quiz_df.empty:
-                    st.dataframe(
+                st.markdown("##### 📝 記述・並び替え問題集 一覧・個別編集")
+                if quiz_df.empty:
+                    st.caption("対象となる問題集データがありません。")
+                else:
+                    event_q = st.dataframe(
                         quiz_df,
+                        on_select="rerun",
+                        selection_mode="single-row",
                         use_container_width=True,
                         key="df_quiz_edit",
                     )
+
+                    selected_q_rows = event_q.selection.rows if event_q else []
+                    selected_q_idx = selected_q_rows[0] if selected_q_rows else 0
+                    
+                    if 0 <= selected_q_idx < len(quiz_df):
+                        selected_q_row = quiz_df.iloc[selected_q_idx]
+                        
+                        st.markdown("---")
+                        q_title_str, _ = format_question_and_answer(selected_q_row)
+                        st.markdown(f"#### 🛠️ 選択中の問題修正 (第 {selected_q_idx + 1} 問)")
+                        
+                        q_col1, q_col2 = st.columns([1, 2])
+                        with q_col1:
+                            st.caption("【現在の画像プレビュー】")
+                            display_question_image(selected_q_row, width=220, show_caption=True)
+                        
+                        with q_col2:
+                            with st.form(f"edit_quiz_form_{selected_q_idx}"):
+                                edited_q_vals = {}
+                                for col in quiz_df.columns:
+                                    if col == "source_file":
+                                        continue
+                                    orig_val = get_clean_str(selected_q_row.get(col))
+                                    edited_q_vals[col] = st.text_input(f"{col}", value=orig_val, key=f"q_edit_{selected_q_idx}_{col}")
+                                
+                                if st.form_submit_button("💾 この変更をExcelファイルに上書き保存", use_container_width=True):
+                                    # 元データフレーム(df_all)の対応行を更新
+                                    match_mask = True
+                                    for key_col in ["question", "answer", "image", "option1"]:
+                                        if key_col in selected_q_row and pd.notna(selected_q_row[key_col]):
+                                            match_mask = match_mask & (df_all[key_col] == selected_q_row[key_col])
+                                    
+                                    matched_indices = df_all[match_mask].index
+                                    if len(matched_indices) > 0:
+                                        target_index = matched_indices[0]
+                                        for k, v in edited_q_vals.items():
+                                            if k in df_all.columns:
+                                                df_all.at[target_index, k] = v
+                                        save_df_to_excel(df_all)
+                                        st.success("✅ データがExcelファイルに上書き保存されました！")
+                                        st.rerun()
+                                    else:
+                                        st.error("⚠️ 更新対象の元データが見つかりませんでした。")
