@@ -416,9 +416,18 @@ elif selected == "📖 練習モード":
                     st.markdown(f"### 第 {curr_idx + 1} 問 / 全 {total_q} 問")
                 with c_top2:
                     if st.button("🛠️ この問題を修正する"):
-                        question_text, _ = format_question_and_answer(q)
-                        st.session_state["edit_search_keyword"] = question_text
+                        # 画像名やキャラ名を取得して確実に目的の行へピンポイントジャンプ
+                        img_name = get_clean_str(q.get("image") or q.get("画像"))
+                        char_name = get_clean_str(q.get("name") or q.get("名前"))
+                        
+                        target_kw = img_name or char_name
+                        if not target_kw:
+                            target_kw, _ = format_question_and_answer(q)
+
+                        st.session_state["edit_search_keyword"] = target_kw
                         st.session_state["edit_active_tab"] = 1
+                        st.session_state["selected_char_index"] = 0
+                        st.session_state["selected_quiz_index"] = 0
                         st.session_state["current_nav"] = "➕ データ追加・編集"
                         st.rerun()
 
