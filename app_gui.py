@@ -179,6 +179,7 @@ with st.sidebar:
         else 0
     )
 
+    # keyにcurrent_navを直接指定・動的同期
     selected = option_menu(
         menu_title=None,
         options=menu_options,
@@ -191,7 +192,7 @@ with st.sidebar:
             "plus-circle",
         ],
         default_index=def_idx,
-        key="nav_menu",
+        key=f"nav_menu_{st.session_state['current_nav']}",
     )
     st.session_state["current_nav"] = selected
 
@@ -410,9 +411,9 @@ elif selected == "📖 練習モード":
                 with c_top2:
                     if st.button("🛠️ この問題を修正する"):
                         question_text, _ = format_question_and_answer(q)
-                        st.session_state["edit_search_keyword"] = (
-                            question_text
-                        )
+                        # 検索キーワードと編集タブへの直接遷移用フラグを設定
+                        st.session_state["edit_search_keyword"] = question_text
+                        st.session_state["edit_active_tab"] = 1  # 2つ目の編集タブを指定
                         st.session_state["current_nav"] = "➕ データ追加・編集"
                         st.rerun()
 
@@ -776,12 +777,22 @@ elif selected == "➕ データ追加・編集":
     if "added_data" not in st.session_state:
         st.session_state["added_data"] = pd.DataFrame()
 
-    main_tab1, main_tab2 = st.tabs(["➕ 1. データの追加", "✏️ 2. データの編集"])
+    # 外部（練習モード）からの遷移時はデフォルトで「データ編集」タブを開く
+    default_tab_idx = st.session_state.pop("edit_active_tab", 0)
+
+    # st.tabsは直接初期アクティブタブを指定できないため、Radioメニュー等と組み合わせて完全制御
+    tab_selection = st.radio(
+        "機能切替",
+        ["➕ 1. データの追加", "✏️ 2. データの編集"],
+        index=default_tab_idx,
+        horizontal=True,
+        label_visibility="collapsed"
+    )
 
     # ----------------------------------------------------
     # 【1. データの追加】
     # ----------------------------------------------------
-    with main_tab1:
+    if tab_selection == "➕ 1. データの追加":
         st.subheader("📝 新しいデータの追加")
         sub_add_tab1, sub_add_tab2, sub_add_tab3 = st.tabs(
             ["👤 キャラデータ", "📝 記述問題", "🔢 並び替え問題"]
@@ -927,7 +938,7 @@ elif selected == "➕ データ追加・編集":
     # ----------------------------------------------------
     # 【2. データの編集】
     # ----------------------------------------------------
-    with main_tab2:
+    elif tab_selection == "✏️ 2. データの編集":
         st.subheader("✏️ データの確認・画像チェック・リアルタイム編集")
 
         default_keyword = st.session_state.get("edit_search_keyword", "")
@@ -935,7 +946,10 @@ elif selected == "➕ データ追加・編集":
             "🔍 編集対象問題の絞り込み検索",
             value=default_keyword,
             placeholder="キーワード（名前・問題文・正解など）で検索",
+            key="edit_search_keyword_input"
         )
+        # 入力内容をsession_stateへ保持
+        st.session_state["edit_search_keyword"] = filter_kw
 
         target_data = pd.concat(
             [df_all, st.session_state["added_data"]], ignore_index=True
@@ -1020,7 +1034,7 @@ elif selected == "➕ データ追加・編集":
                             st.session_state["selected_char_index"] = sel_r
                             st.rerun()
 
-                    # 編集用アコーディオン（必要に応じて開いて編集可能）
+                    # 編集用アコーディオン
                     with st.expander("🛠️ データを直接編集する（セル編集・行の追加削除）"):
                         edited_char = st.data_editor(
                             char_df,
