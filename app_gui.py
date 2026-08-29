@@ -86,14 +86,12 @@ def display_question_image(q_data, width=350, caption=None, is_correct_view=Fals
 def get_correct_answers_list(q, correct_ans_str):
     """問題データから正解の要素リストを取得する"""
     answers = []
-    # answer_1, answer_2 ... の個別カラムがある場合
     for i in range(1, 10):
         val = get_clean_str(q.get(f"answer_{i}"))
         if val:
             answers.append(val)
             
     if not answers and correct_ans_str:
-        # 読点やカンマで区切られている場合
         if "、" in correct_ans_str or "," in correct_ans_str:
             answers = [
                 t.strip() for t in re.split(r"[、,]", correct_ans_str) if t.strip()
@@ -436,7 +434,6 @@ elif selected == "📖 練習モード":
                 question_text, correct_ans_raw = format_question_and_answer(q)
                 st.info(f"**【問題】**\n{question_text}")
 
-                # 回答前の画像表示 (正解表示中でない場合)
                 if not st.session_state.p_submitted:
                     display_question_image(q, is_correct_view=False)
 
@@ -513,11 +510,9 @@ elif selected == "📖 練習モード":
                         st.rerun()
 
                 else:
-                    # 判定後の結果 & 正解画像の表示
                     disp_ans = "、".join(correct_list)
                     if st.session_state.p_last_is_correct:
                         st.success("⭕ 正解！")
-                        # 正解画像があれば優先切り替え表示
                         display_question_image(q, is_correct_view=True)
                     else:
                         st.error(f"❌ 不正解... 正解は: **{disp_ans}**")
@@ -741,266 +736,310 @@ elif selected == "🔍 AI検索モード":
 
 # --- 6. データ追加・編集モード ---
 elif selected == "➕ データ追加・編集":
-    st.title("➕ データ追加 & 登録問題一覧・編集")
-    st.caption("新しい問題の追加や、登録済みデータの直接編集・修正が行えます。")
+    st.title("➕ データ管理センター")
+    st.caption("データの追加および、登録済みデータの編集・画像確認を行えます。")
     st.write("---")
 
     if "added_data" not in st.session_state:
         st.session_state["added_data"] = pd.DataFrame()
 
-    tab1, tab2, tab3 = st.tabs(
-        ["👤 1. キャラデータ", "📝 2. 記述問題", "🔢 3. 並び替え問題"]
-    )
+    # ★ 2大カテゴリに大分割（1. データの追加 / 2. データの編集・確認）
+    main_tab1, main_tab2 = st.tabs(["📥 1. データの追加", "✏️ 2. データの編集・確認"])
 
-    with tab1:
-        st.subheader("キャラクターマスター追加")
-        
-        up_img = st.file_uploader("🖼️ キャラクター画像を添付", type=["png", "jpg", "jpeg"], key="upload_char_img")
-        uploaded_img_name = save_uploaded_image(up_img)
-
-        with st.form("char_form", clear_on_submit=True):
-            c_name = st.text_input("名前 (name)", placeholder="例: モンキー・D・ルフィ")
-            c_nickname = st.text_input("異名 (nickname)", placeholder="例: 麦わらのルフィ")
-            c_fruit = st.text_input("悪魔の実 (devil_fruit)", placeholder="例: ヒトヒトの実 モデル『ニカ』")
-            c_fruit_type = st.text_input("悪魔の実の種別 (fruit_type)", placeholder="例: ゾオン系 幻獣種")
-            c_affil = st.text_input("所属 (affiliation)", placeholder="例: 麦わらの一味")
-            c_question = st.text_input("カスタム問題文 (question)", placeholder="空欄の場合デフォルト表示")
-
-            if st.form_submit_button("キャラデータを追加"):
-                new_item = {
-                    "type": "キャラデータ",
-                    "name": c_name,
-                    "nickname": c_nickname,
-                    "devil_fruit": c_fruit,
-                    "fruit_type": c_fruit_type,
-                    "affiliation": c_affil,
-                    "question": c_question,
-                    "image": uploaded_img_name,
-                }
-                new_row = pd.DataFrame([new_item])
-                st.session_state["added_data"] = pd.concat(
-                    [st.session_state["added_data"], new_row], ignore_index=True
-                )
-                st.success(
-                    f"キャラデータ（画像: {uploaded_img_name or 'なし'}）を一時追加しました！"
-                )
-
-    with tab2:
-        st.subheader("記述式クイズ追加")
-        num_answers = st.selectbox(
-            "解答（正解）の項目数を選択",
-            options=[1, 2, 3, 4, 5],
-            index=0,
-            help="複数解答がある場合は項目数を変更してください。",
+    # ----------------------------------------------------
+    # 大タブ 1: データの追加
+    # ----------------------------------------------------
+    with main_tab1:
+        sub_tab1, sub_tab2, sub_tab3 = st.tabs(
+            ["👤 キャラデータ追加", "📝 記述問題追加", "🔢 並び替え問題追加"]
         )
 
-        col_img1, col_img2 = st.columns(2)
-        with col_img1:
-            q_img = st.file_uploader("🖼️ 問題用画像を添付", type=["png", "jpg", "jpeg"], key="upload_q_img")
-            q_img_name = save_uploaded_image(q_img)
-        with col_img2:
-            c_img = st.file_uploader("🖼️ 正解表示用画像を添付 (任意)", type=["png", "jpg", "jpeg"], key="upload_c_img")
-            c_img_name = save_uploaded_image(c_img)
-
-        with st.form("descriptive_form", clear_on_submit=True):
-            q_text = st.text_area(
-                "問題文",
-                placeholder="例：現在の四皇（新四皇）の名称をすべて答えろ。",
+        with sub_tab1:
+            st.subheader("👤 キャラクターマスターデータの追加")
+            up_img = st.file_uploader(
+                "🖼️ キャラクター画像を添付", type=["png", "jpg", "jpeg"], key="upload_char_img"
             )
-            ans_inputs = []
-            cols = st.columns(min(num_answers, 3))
-            for i in range(num_answers):
-                col_target = cols[i % 3]
-                with col_target:
-                    ans_val = st.text_input(
-                        f"正解 {i+1}",
-                        placeholder=f"例：正解{i+1}",
-                        key=f"ans_input_{i}",
-                    )
-                    ans_inputs.append(ans_val)
+            uploaded_img_name = save_uploaded_image(up_img)
 
-            exp_text = st.text_area(
-                "解説・関連情報",
-                placeholder="例：ルフィ、バギー、シャンクス、ティーチの4名。",
-            )
-            genre = st.text_input(
-                "ジャンル/関連エピソード", placeholder="例：ワノ国編後 / 懸賞金"
-            )
+            with st.form("char_form", clear_on_submit=True):
+                c_name = st.text_input("名前 (name)", placeholder="例: モンキー・D・ルフィ")
+                c_nickname = st.text_input("異名 (nickname)", placeholder="例: 麦わらのルフィ")
+                c_fruit = st.text_input("悪魔の実 (devil_fruit)", placeholder="例: ヒトヒトの実 モデル『ニカ』")
+                c_fruit_type = st.text_input("悪魔の実の種別 (fruit_type)", placeholder="例: ゾオン系 幻獣種")
+                c_affil = st.text_input("所属 (affiliation)", placeholder="例: 麦わらの一味")
+                c_question = st.text_input("カスタム問題文 (question)", placeholder="空欄の場合デフォルト表示")
 
-            if st.form_submit_button("記述問題を追加"):
-                valid_answers = [
-                    a.strip() for a in ans_inputs if a and a.strip()
-                ]
-                if q_text and valid_answers:
-                    combined_answer = "、".join(valid_answers)
+                if st.form_submit_button("＋ キャラデータを追加"):
                     new_item = {
-                        "type": "記述",
-                        "question": q_text,
-                        "answer": combined_answer,
-                        "answer_count": len(valid_answers),
-                        "explanation": exp_text,
-                        "genre": genre,
-                        "image": q_img_name,
-                        "correct_image": c_img_name,
+                        "type": "キャラデータ",
+                        "name": c_name,
+                        "nickname": c_nickname,
+                        "devil_fruit": c_fruit,
+                        "fruit_type": c_fruit_type,
+                        "affiliation": c_affil,
+                        "question": c_question,
+                        "image": uploaded_img_name,
                     }
-                    for idx, a_val in enumerate(ans_inputs):
-                        new_item[f"answer_{idx+1}"] = a_val
-
                     new_row = pd.DataFrame([new_item])
                     st.session_state["added_data"] = pd.concat(
-                        [st.session_state["added_data"], new_row],
-                        ignore_index=True,
+                        [st.session_state["added_data"], new_row], ignore_index=True
                     )
-                    st.success("記述問題を一時追加しました！下の「問題集データ」タブから確認できます。")
+                    st.success(
+                        f"キャラデータ（画像: {uploaded_img_name or 'なし'}）を一時追加しました！"
+                    )
+
+        with sub_tab2:
+            st.subheader("📝 記述式クイズの追加")
+            num_answers = st.selectbox(
+                "解答（正解）の項目数を選択",
+                options=[1, 2, 3, 4, 5],
+                index=0,
+                help="複数解答がある場合は項目数を変更してください。",
+            )
+
+            col_img1, col_img2 = st.columns(2)
+            with col_img1:
+                q_img = st.file_uploader("🖼️ 問題用画像を添付", type=["png", "jpg", "jpeg"], key="upload_q_img")
+                q_img_name = save_uploaded_image(q_img)
+            with col_img2:
+                c_img = st.file_uploader("🖼️ 正解表示用画像を添付 (任意)", type=["png", "jpg", "jpeg"], key="upload_c_img")
+                c_img_name = save_uploaded_image(c_img)
+
+            with st.form("descriptive_form", clear_on_submit=True):
+                q_text = st.text_area(
+                    "問題文",
+                    placeholder="例：現在の四皇（新四皇）の名称をすべて答えろ。",
+                )
+                ans_inputs = []
+                cols = st.columns(min(num_answers, 3))
+                for i in range(num_answers):
+                    col_target = cols[i % 3]
+                    with col_target:
+                        ans_val = st.text_input(
+                            f"正解 {i+1}",
+                            placeholder=f"例：正解{i+1}",
+                            key=f"ans_input_{i}",
+                        )
+                        ans_inputs.append(ans_val)
+
+                exp_text = st.text_area(
+                    "解説・関連情報",
+                    placeholder="例：ルフィ、バギー、シャンクス、ティーチの4名。",
+                )
+                genre = st.text_input(
+                    "ジャンル/関連エピソード", placeholder="例：ワノ国編後 / 懸賞金"
+                )
+
+                if st.form_submit_button("＋ 記述問題を追加"):
+                    valid_answers = [
+                        a.strip() for a in ans_inputs if a and a.strip()
+                    ]
+                    if q_text and valid_answers:
+                        combined_answer = "、".join(valid_answers)
+                        new_item = {
+                            "type": "記述",
+                            "question": q_text,
+                            "answer": combined_answer,
+                            "answer_count": len(valid_answers),
+                            "explanation": exp_text,
+                            "genre": genre,
+                            "image": q_img_name,
+                            "correct_image": c_img_name,
+                        }
+                        for idx, a_val in enumerate(ans_inputs):
+                            new_item[f"answer_{idx+1}"] = a_val
+
+                        new_row = pd.DataFrame([new_item])
+                        st.session_state["added_data"] = pd.concat(
+                            [st.session_state["added_data"], new_row],
+                            ignore_index=True,
+                        )
+                        st.success("記述問題を一時追加しました！")
+                    else:
+                        st.error("問題文と少なくとも1つの正解を入力してください。")
+
+        with sub_tab3:
+            st.subheader("🔢 並び替えクイズの追加")
+            with st.form("sort_form", clear_on_submit=True):
+                sq_text = st.text_area(
+                    "問題文",
+                    placeholder="例：次の出来事を発生した順に並び替えよ。",
+                )
+                col1, col2 = st.columns(2)
+                with col1:
+                    opt1 = st.text_input(
+                        "選択肢 1 (●)", placeholder="例：アラバスタ王国脱出"
+                    )
+                    opt2 = st.text_input(
+                        "選択肢 2 (△)", placeholder="例：ドラム王国脱出"
+                    )
+                with col2:
+                    opt3 = st.text_input(
+                        "選択肢 3 (□)", placeholder="例：ローグタウン脱出"
+                    )
+                    opt4 = st.text_input(
+                        "選択肢 4 (×)", placeholder="例：空島脱出"
+                    )
+
+                s_answer = st.text_input(
+                    "正解の順序（番号で指定）", placeholder="例：3214"
+                )
+                s_exp = st.text_area("解説", placeholder="時系列の補足などを記入")
+
+                if st.form_submit_button("＋ 並び替え問題を追加"):
+                    if sq_text and s_answer and opt1 and opt2:
+                        new_sort_item = {
+                            "type": "並び替え",
+                            "question": sq_text,
+                            "option1": opt1,
+                            "option2": opt2,
+                            "option3": opt3,
+                            "option4": opt4,
+                            "answer": s_answer,
+                            "explanation": s_exp,
+                        }
+                        new_row = pd.DataFrame([new_sort_item])
+                        st.session_state["added_data"] = pd.concat(
+                            [st.session_state["added_data"], new_row],
+                            ignore_index=True,
+                        )
+                        st.success("並び替え問題を一時追加しました！")
+                    else:
+                        st.error("必要な項目を入力してください。")
+
+    # ----------------------------------------------------
+    # 大タブ 2: データの編集・確認（画像のワンクリック確認機能付き）
+    # ----------------------------------------------------
+    with main_tab2:
+        default_keyword = st.session_state.get("edit_search_keyword", "")
+
+        filter_kw = st.text_input(
+            "🔍 編集対象の絞り込み検索",
+            value=default_keyword,
+            placeholder="キャラ名や問題文、正解のキーワードを入力して絞り込み",
+        )
+
+        target_data = pd.concat(
+            [df_all, st.session_state["added_data"]], ignore_index=True
+        )
+
+        if target_data.empty:
+            st.info("現在表示・編集できるデータがありません。")
+        else:
+            if filter_kw:
+                mask = (
+                    target_data.astype(str)
+                    .apply(
+                        lambda x: x.str.contains(
+                            filter_kw, case=False, na=False
+                        )
+                    )
+                    .any(axis=1)
+                )
+                target_data = target_data[mask]
+
+            st.caption(
+                "💡 セルをダブルクリックすると直接書き換えられます。選択した行の画像は下部プレビューでワンクリック確認できます。"
+            )
+
+            is_char_mask = (
+                target_data["type"] == "キャラデータ"
+                if "type" in target_data.columns
+                else pd.Series(False, index=target_data.index)
+            )
+            if not is_char_mask.any() and "characterid" in target_data.columns:
+                is_char_mask = target_data["characterid"].notna()
+
+            char_df = target_data[is_char_mask].copy().dropna(how="all", axis=1)
+            quiz_df = target_data[~is_char_mask].copy().dropna(how="all", axis=1)
+
+            view_tab1, view_tab2 = st.tabs(["👥 キャラクターマスター", "📝 問題集データ"])
+
+            with view_tab1:
+                st.markdown("##### 👥 キャラクターマスター 一覧")
+                if char_df.empty:
+                    st.caption("該当するキャラクターデータはありません。")
                 else:
-                    st.error("問題文と少なくとも1つの正解を入力してください。")
-
-    with tab3:
-        st.subheader("並び替えクイズ追加")
-        with st.form("sort_form", clear_on_submit=True):
-            sq_text = st.text_area(
-                "問題文",
-                placeholder="例：次の出来事を発生した順に並び替えよ。",
-            )
-            col1, col2 = st.columns(2)
-            with col1:
-                opt1 = st.text_input(
-                    "選択肢 1 (●)", placeholder="例：アラバスタ王国脱出"
-                )
-                opt2 = st.text_input(
-                    "選択肢 2 (△)", placeholder="例：ドラム王国脱出"
-                )
-            with col2:
-                opt3 = st.text_input(
-                    "選択肢 3 (□)", placeholder="例：ローグタウン脱出"
-                )
-                opt4 = st.text_input(
-                    "選択肢 4 (×)", placeholder="例：空島脱出"
-                )
-
-            s_answer = st.text_input(
-                "正解の順序（番号で指定）", placeholder="例：3214"
-            )
-            s_exp = st.text_area("解説", placeholder="時系列の補足などを記入")
-
-            if st.form_submit_button("並び替え問題を追加"):
-                if sq_text and s_answer and opt1 and opt2:
-                    new_sort_item = {
-                        "type": "並び替え",
-                        "question": sq_text,
-                        "option1": opt1,
-                        "option2": opt2,
-                        "option3": opt3,
-                        "option4": opt4,
-                        "answer": s_answer,
-                        "explanation": s_exp,
-                    }
-                    new_row = pd.DataFrame([new_sort_item])
-                    st.session_state["added_data"] = pd.concat(
-                        [st.session_state["added_data"], new_row],
-                        ignore_index=True,
+                    edited_char = st.data_editor(
+                        char_df,
+                        num_rows="dynamic",
+                        use_container_width=True,
+                        key="editor_char_data",
                     )
-                    st.success("並び替え問題を一時追加しました！下の「問題集データ」タブから確認できます。")
+                    buffer_char = io.BytesIO()
+                    with pd.ExcelWriter(buffer_char, engine="openpyxl") as writer:
+                        edited_char.to_excel(writer, index=False)
+
+                    st.download_button(
+                        label="📥 キャラクターマスターをExcel出力 (`character_master.xlsx`)",
+                        data=buffer_char.getvalue(),
+                        file_name="character_master.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    )
+
+            with view_tab2:
+                st.markdown("##### 📝 記述・並び替え問題集 一覧")
+                if quiz_df.empty:
+                    st.caption("該当する問題集データはありません。")
                 else:
-                    st.error("必要な項目を入力してください。")
-
-    st.write("---")
-    st.subheader("✏️ 登録問題一覧 & リアルタイム編集")
-
-    default_keyword = st.session_state.get("edit_search_keyword", "")
-
-    filter_kw = st.text_input(
-        "🔍 編集対象問題の絞り込み検索",
-        value=default_keyword,
-        placeholder="問題文や正解のキーワードを入力して絞り込み",
-    )
-
-    target_data = pd.concat(
-        [df_all, st.session_state["added_data"]], ignore_index=True
-    )
-
-    if target_data.empty:
-        st.info("現在表示・編集できるデータがありません。")
-    else:
-        if filter_kw:
-            mask = (
-                target_data.astype(str)
-                .apply(
-                    lambda x: x.str.contains(
-                        filter_kw, case=False, na=False
+                    edited_quiz = st.data_editor(
+                        quiz_df,
+                        num_rows="dynamic",
+                        use_container_width=True,
+                        key="editor_quiz_data",
                     )
+                    buffer_quiz = io.BytesIO()
+                    with pd.ExcelWriter(buffer_quiz, engine="openpyxl") as writer:
+                        edited_quiz.to_excel(writer, index=False)
+
+                    st.download_button(
+                        label="📥 問題集データをExcel出力 (`quiz_data.xlsx`)",
+                        data=buffer_quiz.getvalue(),
+                        file_name="quiz_data.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    )
+
+            st.write("---")
+
+            # ★ 画像のワンクリック確認（プレビュー）機能
+            st.markdown("### 🖼️ 画像プレビュー・確認")
+            st.caption("一覧にあるデータの画像（`image` / `correct_image`）をワンクリックで選択・確認できます。")
+
+            # 画像プレビュー候補アイテムの生成
+            preview_options = {}
+            for idx, row in target_data.iterrows():
+                name_display = get_clean_str(row.get("name")) or get_clean_str(row.get("question"))[:20] or f"データ #{idx+1}"
+                img_val = get_clean_str(row.get("image") or row.get("画像"))
+                c_img_val = get_clean_str(row.get("correct_image") or row.get("正解画像"))
+                
+                if img_val or c_img_val:
+                    label = f"[{idx+1}] {name_display} (画像: {img_val or '無'} / 正解画像: {c_img_val or '無'})"
+                    preview_options[label] = row
+
+            if preview_options:
+                selected_item_label = st.selectbox(
+                    "画像を確認したい対象データを選択", options=list(preview_options.keys())
                 )
-                .any(axis=1)
+                if selected_item_label:
+                    selected_row = preview_options[selected_item_label]
+                    col_p1, col_p2 = st.columns(2)
+                    with col_p1:
+                        st.markdown("**【問題・キャラクター用画像】**")
+                        if not display_question_image(selected_row, width=300, is_correct_view=False):
+                            st.caption("⚠️ 画像ファイルが存在しないか、設定されていません。")
+                    with col_p2:
+                        st.markdown("**【正解表示用画像】**")
+                        if not display_question_image(selected_row, width=300, is_correct_view=True):
+                            st.caption("⚠️ 正解表示用画像が存在しないか、設定されていません。")
+            else:
+                st.info("現在表示中のデータの中に、画像ファイル名が登録されている項目はありません。")
+
+            st.write("")
+            if st.button("🔄 一時追加データ・検索フィルターをリセット"):
+                st.session_state["added_data"] = pd.DataFrame()
+                st.session_state["edit_search_keyword"] = ""
+                st.rerun()
+
+            st.caption(
+                "※ダウンロードしたファイルをGitHubにアップロード（上書き保存）すると、本番データに反映されます。"
             )
-            target_data = target_data[mask]
-
-        st.caption(
-            "💡 タブを切り替えてデータを個別に確認・編集できます。セルをダブルクリックすると直接書き換えられます。"
-        )
-
-        is_char_mask = (
-            target_data["type"] == "キャラデータ"
-            if "type" in target_data.columns
-            else pd.Series(False, index=target_data.index)
-        )
-        if not is_char_mask.any() and "characterid" in target_data.columns:
-            is_char_mask = target_data["characterid"].notna()
-
-        char_df = target_data[is_char_mask].copy().dropna(how="all", axis=1)
-        quiz_df = target_data[~is_char_mask].copy().dropna(how="all", axis=1)
-
-        view_tab1, view_tab2 = st.tabs(["👥 キャラクターマスター", "📝 問題集データ"])
-
-        with view_tab1:
-            st.markdown("##### 👥 キャラクターマスター 一覧")
-            if char_df.empty:
-                st.caption("該当するキャラクターデータはありません。")
-            else:
-                edited_char = st.data_editor(
-                    char_df,
-                    num_rows="dynamic",
-                    use_container_width=True,
-                    key="editor_char_data",
-                )
-                buffer_char = io.BytesIO()
-                with pd.ExcelWriter(buffer_char, engine="openpyxl") as writer:
-                    edited_char.to_excel(writer, index=False)
-
-                st.download_button(
-                    label="📥 キャラクターマスターをExcel出力 (`character_master.xlsx`)",
-                    data=buffer_char.getvalue(),
-                    file_name="character_master.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                )
-
-        with view_tab2:
-            st.markdown("##### 📝 記述・並び替え問題集 一覧")
-            if quiz_df.empty:
-                st.caption("該当する問題集データはありません。")
-            else:
-                edited_quiz = st.data_editor(
-                    quiz_df,
-                    num_rows="dynamic",
-                    use_container_width=True,
-                    key="editor_quiz_data",
-                )
-                buffer_quiz = io.BytesIO()
-                with pd.ExcelWriter(buffer_quiz, engine="openpyxl") as writer:
-                    edited_quiz.to_excel(writer, index=False)
-
-                st.download_button(
-                    label="📥 問題集データをExcel出力 (`quiz_data.xlsx`)",
-                    data=buffer_quiz.getvalue(),
-                    file_name="quiz_data.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                )
-
-        st.write("")
-        if st.button("🔄 一時追加データ・検索フィルターをリセット"):
-            st.session_state["added_data"] = pd.DataFrame()
-            st.session_state["edit_search_keyword"] = ""
-            st.rerun()
-
-        st.caption(
-            "※ダウンロードしたファイルをGitHubにアップロード（上書き保存）すると、本番データに反映されます。"
-        )
