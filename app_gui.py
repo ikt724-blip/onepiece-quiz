@@ -142,7 +142,6 @@ def save_df_to_excel(df):
     if "source_file" not in df.columns:
         df["source_file"] = "data_master.xlsx"
     
-    # ソースファイルごとに分割して保存
     grouped = df.groupby("source_file")
     for file_name, group in grouped:
         clean_group = group.drop(columns=["source_file"], errors="ignore")
@@ -164,7 +163,7 @@ if "current_nav" not in st.session_state:
 
 df_all = load_all_data()
 
-# --- 1. ホーム画面 ---
+# --- 1. ホーム画面（案2：サイド・バイ・サイド型） ---
 if st.session_state["current_nav"] == "ホーム":
     all_imgs = (
         glob.glob("images/*.png")
@@ -176,7 +175,7 @@ if st.session_state["current_nav"] == "ホーム":
 
     grid_imgs_html = ""
     if all_imgs:
-        sample_imgs = [random.choice(all_imgs) for _ in range(160)]
+        sample_imgs = [random.choice(all_imgs) for _ in range(80)]
         for img_path in sample_imgs:
             try:
                 with open(img_path, "rb") as f:
@@ -195,15 +194,14 @@ if st.session_state["current_nav"] == "ホーム":
             100% {{ transform: translateY(-50%); }}
         }}
 
-        .main-hero-box {{
+        .side-hero-box {{
             position: relative;
-            max-width: 680px;
+            width: 100%;
             height: 520px;
-            margin: 0 auto 20px auto;
-            border: 3px solid #333;
-            border-radius: 20px;
+            border: 2px solid #333;
+            border-radius: 16px;
             overflow: hidden;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.6);
             background-color: #0d0d0d;
         }}
 
@@ -213,10 +211,10 @@ if st.session_state["current_nav"] == "ホーム":
             left: 0;
             width: 100%;
             display: grid;
-            grid-template-columns: repeat(8, 1fr);
+            grid-template-columns: repeat(4, 1fr);
             gap: 2px;
-            animation: scroll-vertical 30s linear infinite;
-            opacity: 0.6;
+            animation: scroll-vertical 25s linear infinite;
+            opacity: 0.75;
         }}
 
         .bg-tile {{
@@ -228,56 +226,60 @@ if st.session_state["current_nav"] == "ホーム":
         .overlay-mask {{
             position: absolute;
             inset: 0;
-            background: rgba(0, 0, 0, 0.45);
-            backdrop-filter: blur(1px);
-        }}
-
-        div[data-testid="stColumn"] {{
-            z-index: 10;
+            background: linear-gradient(180deg, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.5) 100%);
+            backdrop-filter: blur(0.5px);
         }}
 
         div.stButton > button {{
-            background-color: rgba(255, 255, 255, 0.15) !important;
+            background-color: rgba(255, 255, 255, 0.08) !important;
             color: #ffffff !important;
-            border: 1.5px solid rgba(255, 255, 255, 0.6) !important;
-            backdrop-filter: blur(8px) !important;
+            border: 1.5px solid rgba(255, 255, 255, 0.4) !important;
+            backdrop-filter: blur(6px) !important;
             border-radius: 12px !important;
             font-size: 1.05rem !important;
             font-weight: 700 !important;
-            padding: 12px 0 !important;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3) !important;
+            padding: 14px 0 !important;
+            margin-bottom: 8px !important;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
             transition: all 0.25s ease !important;
         }}
 
         div.stButton > button:hover {{
-            background-color: rgba(255, 204, 0, 0.85) !important;
+            background-color: rgba(255, 204, 0, 0.9) !important;
             color: #000000 !important;
             border-color: #ffcc00 !important;
-            box-shadow: 0 0 20px rgba(255, 204, 0, 0.8) !important;
+            box-shadow: 0 0 18px rgba(255, 204, 0, 0.8) !important;
             transform: translateY(-2px);
         }}
         </style>
-
-        <div class="main-hero-box">
-            <div class="mosaic-bg-scroll">
-                {grid_imgs_html}
-                {grid_imgs_html}
-            </div>
-            <div class="overlay-mask"></div>
-        </div>
         """,
         unsafe_allow_html=True,
     )
 
-    st.markdown('<div style="margin-top: -500px;"></div>', unsafe_allow_html=True)
+    left_col, right_col = st.columns([1, 1], gap="large")
 
-    _, center_col, _ = st.columns([1, 10, 1])
-    with center_col:
+    # 左側: ランダム画像のアニメーションモザイクパネル
+    with left_col:
+        st.markdown(
+            f"""
+            <div class="side-hero-box">
+                <div class="mosaic-bg-scroll">
+                    {grid_imgs_html}
+                    {grid_imgs_html}
+                </div>
+                <div class="overlay-mask"></div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    # 右側: タイトル & ナビゲーションボタン群
+    with right_col:
         st.markdown(
             """
-            <div style="text-align: center; margin-bottom: 25px;">
-                <h1 style="color: #ffffff; margin: 0; font-size: 1.8rem; text-shadow: 2px 2px 8px #000;">🏴‍☠️ ONE PIECE ナレッジキング対策</h1>
-                <p style="color: #ffcc00; margin: 5px 0 0 0; font-weight: bold; letter-spacing: 1px; text-shadow: 1px 1px 4px #000;">― 最強のデータベースを脳に刻め ―</p>
+            <div style="margin-bottom: 25px; text-align: left;">
+                <h1 style="color: #ffffff; margin: 0; font-size: 2.1rem; text-shadow: 2px 2px 8px #000;">🏴‍☠️ ONE PIECE<br>ナレッジキング対策</h1>
+                <p style="color: #ffcc00; margin: 8px 0 0 0; font-weight: bold; letter-spacing: 1px; text-shadow: 1px 1px 4px #000;">― 最強のデータベースを脳に刻め ―</p>
             </div>
             """,
             unsafe_allow_html=True,
@@ -287,7 +289,7 @@ if st.session_state["current_nav"] == "ホーム":
             st.session_state["current_nav"] = "🏆 本番模試（50問/60分）"
             st.rerun()
 
-        if st.button("💻 練習モード", use_container_width=True):
+        if st.button("📖 練習モード", use_container_width=True):
             st.session_state["current_nav"] = "📖 練習モード"
             st.rerun()
 
@@ -303,12 +305,10 @@ if st.session_state["current_nav"] == "ホーム":
             st.session_state["current_nav"] = "➕ データ追加・編集"
             st.rerun()
 
-    st.markdown('<div style="margin-top: 40px;"></div>', unsafe_allow_html=True)
-
-    if not df_all.empty:
-        st.info(f"📊 現在の登録データ総数: **{len(df_all)}** 件")
-    else:
-        st.warning("現在、読み込めるExcelデータ（.xlsx）がありません。")
+        if not df_all.empty:
+            st.caption(f"📊 現在の登録データ総数: **{len(df_all)}** 件")
+        else:
+            st.warning("現在、読み込めるExcelデータ（.xlsx）がありません。")
 
 # --- ホーム戻る用共通ヘッダー ---
 else:
@@ -984,7 +984,6 @@ elif st.session_state["current_nav"] == "➕ データ追加・編集":
         )
         st.session_state["edit_search_keyword"] = filter_kw
 
-        # 既存データと新規追加分を結合
         target_data = pd.concat(
             [df_all, st.session_state["added_data"]], ignore_index=True
         )
@@ -1064,7 +1063,6 @@ elif st.session_state["current_nav"] == "➕ データ追加・編集":
                                     edited_vals[col] = st.text_input(f"{col}", value=orig_val, key=f"c_edit_{selected_idx}_{col}")
                                 
                                 if st.form_submit_button("💾 この変更をExcelファイルに上書き保存", use_container_width=True):
-                                    # 元データフレーム(df_all)の対応行を更新
                                     match_mask = True
                                     for key_col in ["characterid", "name", "image"]:
                                         if key_col in selected_row and pd.notna(selected_row[key_col]):
@@ -1120,7 +1118,6 @@ elif st.session_state["current_nav"] == "➕ データ追加・編集":
                                     edited_q_vals[col] = st.text_input(f"{col}", value=orig_val, key=f"q_edit_{selected_q_idx}_{col}")
                                 
                                 if st.form_submit_button("💾 この変更をExcelファイルに上書き保存", use_container_width=True):
-                                    # 元データフレーム(df_all)の対応行を更新
                                     match_mask = True
                                     for key_col in ["question", "answer", "image", "option1"]:
                                         if key_col in selected_q_row and pd.notna(selected_q_row[key_col]):
