@@ -60,9 +60,9 @@ def save_uploaded_image(uploaded_file):
     return uploaded_file.name
 
 
-# 画像表示ヘルパー関数（問題用・正解用切り替え対応）
+# 画像表示ヘルパー関数（単体表示対応）
 def display_question_image(q_data, width=350, caption=None, is_correct_view=False):
-    """画像パスを探して表示する関数（is_correct_view=True で正解画像の表示を優先）"""
+    """画像パスを探して表示する関数"""
     img_name = ""
     if is_correct_view:
         img_name = get_clean_str(q_data.get("correct_image") or q_data.get("正解画像"))
@@ -743,7 +743,6 @@ elif selected == "➕ データ追加・編集":
     if "added_data" not in st.session_state:
         st.session_state["added_data"] = pd.DataFrame()
 
-    # ★ 2大カテゴリに大分割（1. データの追加 / 2. データの編集・確認）
     main_tab1, main_tab2 = st.tabs(["📥 1. データの追加", "✏️ 2. データの編集・確認"])
 
     # ----------------------------------------------------
@@ -908,7 +907,7 @@ elif selected == "➕ データ追加・編集":
                         st.error("必要な項目を入力してください。")
 
     # ----------------------------------------------------
-    # 大タブ 2: データの編集・確認（画像のワンクリック確認機能付き）
+    # 大タブ 2: データの編集・確認
     # ----------------------------------------------------
     with main_tab2:
         default_keyword = st.session_state.get("edit_search_keyword", "")
@@ -938,9 +937,7 @@ elif selected == "➕ データ追加・編集":
                 )
                 target_data = target_data[mask]
 
-            st.caption(
-                "💡 セルをダブルクリックすると直接書き換えられます。選択した行の画像は下部プレビューでワンクリック確認できます。"
-            )
+            st.caption("💡 セルをダブルクリックすると直接書き換えられます。")
 
             is_char_mask = (
                 target_data["type"] == "キャラデータ"
@@ -955,6 +952,7 @@ elif selected == "➕ データ追加・編集":
 
             view_tab1, view_tab2 = st.tabs(["👥 キャラクターマスター", "📝 問題集データ"])
 
+            # ---- キャラクターマスター ----
             with view_tab1:
                 st.markdown("##### 👥 キャラクターマスター 一覧")
                 if char_df.empty:
@@ -966,6 +964,33 @@ elif selected == "➕ データ追加・編集":
                         use_container_width=True,
                         key="editor_char_data",
                     )
+                    
+                    # ── キャラクター専用：画像ワンクリック表示 ──
+                    st.write("---")
+                    st.markdown("🖼️ **キャラクター画像 プレビュー**")
+                    
+                    char_options = {}
+                    for idx, row in char_df.iterrows():
+                        c_name = get_clean_str(row.get("name")) or f"キャラ #{idx+1}"
+                        img_val = get_clean_str(row.get("image") or row.get("画像"))
+                        if img_val:
+                            char_options[f"{c_name} （画像: {img_val}）"] = row
+                            
+                    if char_options:
+                        selected_char_label = st.selectbox(
+                            "👇 画像を確認したいキャラクターを選択",
+                            options=list(char_options.keys()),
+                            key="select_char_img_preview"
+                        )
+                        if selected_char_label:
+                            selected_char_row = char_options[selected_char_label]
+                            # キャラデータは1枚のみ表示
+                            if not display_question_image(selected_char_row, width=320, is_correct_view=False):
+                                st.caption("⚠️ 画像ファイルが見つかりません。")
+                    else:
+                        st.caption("※現在登録されているキャラクターの中に、画像が指定されたデータがありません。")
+
+                    st.write("")
                     buffer_char = io.BytesIO()
                     with pd.ExcelWriter(buffer_char, engine="openpyxl") as writer:
                         edited_char.to_excel(writer, index=False)
@@ -977,6 +1002,7 @@ elif selected == "➕ データ追加・編集":
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     )
 
+            # ---- 問題集データ ----
             with view_tab2:
                 st.markdown("##### 📝 記述・並び替え問題集 一覧")
                 if quiz_df.empty:
@@ -988,6 +1014,40 @@ elif selected == "➕ データ追加・編集":
                         use_container_width=True,
                         key="editor_quiz_data",
                     )
+
+                    # ── 問題集専用：画像ワンクリック表示 ──
+                    st.write("---")
+                    st.markdown("🖼️ **問題集画像（問題画像・正解画像） プレビュー**")
+
+                    quiz_options = {}
+                    for idx, row in quiz_df.iterrows():
+                        q_txt = get_clean_str(row.get("question") or row.get("問題"))[:25] or f"問題 #{idx+1}"
+                        img_val = get_clean_str(row.get("image") or row.get("画像"))
+                        c_img_val = get_clean_str(row.get("correct_image") or row.get("正解画像"))
+                        if img_val or c_img_val:
+                            quiz_options[f"{q_txt}... (問題画像: {img_val or '無'} / 正解画像: {c_img_val or '無'})"] = row
+
+                    if quiz_options:
+                        selected_quiz_label = st.selectbox(
+                            "👇 画像を確認したい問題を選択",
+                            options=list(quiz_options.keys()),
+                            key="select_quiz_img_preview"
+                        )
+                        if selected_quiz_label:
+                            selected_quiz_row = quiz_options[selected_quiz_label]
+                            col_q1, col_q2 = st.columns(2)
+                            with col_q1:
+                                st.markdown("**【問題用画像】**")
+                                if not display_question_image(selected_quiz_row, width=300, is_correct_view=False):
+                                    st.caption("⚠️ 問題用画像なし")
+                            with col_q2:
+                                st.markdown("**【正解表示用画像】**")
+                                if not display_question_image(selected_quiz_row, width=300, is_correct_view=True):
+                                    st.caption("⚠️ 正解用画像なし")
+                    else:
+                        st.caption("※現在登録されている問題の中に、画像が指定されたデータがありません。")
+
+                    st.write("")
                     buffer_quiz = io.BytesIO()
                     with pd.ExcelWriter(buffer_quiz, engine="openpyxl") as writer:
                         edited_quiz.to_excel(writer, index=False)
@@ -1000,41 +1060,6 @@ elif selected == "➕ データ追加・編集":
                     )
 
             st.write("---")
-
-            # ★ 画像のワンクリック確認（プレビュー）機能
-            st.markdown("### 🖼️ 画像プレビュー・確認")
-            st.caption("一覧にあるデータの画像（`image` / `correct_image`）をワンクリックで選択・確認できます。")
-
-            # 画像プレビュー候補アイテムの生成
-            preview_options = {}
-            for idx, row in target_data.iterrows():
-                name_display = get_clean_str(row.get("name")) or get_clean_str(row.get("question"))[:20] or f"データ #{idx+1}"
-                img_val = get_clean_str(row.get("image") or row.get("画像"))
-                c_img_val = get_clean_str(row.get("correct_image") or row.get("正解画像"))
-                
-                if img_val or c_img_val:
-                    label = f"[{idx+1}] {name_display} (画像: {img_val or '無'} / 正解画像: {c_img_val or '無'})"
-                    preview_options[label] = row
-
-            if preview_options:
-                selected_item_label = st.selectbox(
-                    "画像を確認したい対象データを選択", options=list(preview_options.keys())
-                )
-                if selected_item_label:
-                    selected_row = preview_options[selected_item_label]
-                    col_p1, col_p2 = st.columns(2)
-                    with col_p1:
-                        st.markdown("**【問題・キャラクター用画像】**")
-                        if not display_question_image(selected_row, width=300, is_correct_view=False):
-                            st.caption("⚠️ 画像ファイルが存在しないか、設定されていません。")
-                    with col_p2:
-                        st.markdown("**【正解表示用画像】**")
-                        if not display_question_image(selected_row, width=300, is_correct_view=True):
-                            st.caption("⚠️ 正解表示用画像が存在しないか、設定されていません。")
-            else:
-                st.info("現在表示中のデータの中に、画像ファイル名が登録されている項目はありません。")
-
-            st.write("")
             if st.button("🔄 一時追加データ・検索フィルターをリセット"):
                 st.session_state["added_data"] = pd.DataFrame()
                 st.session_state["edit_search_keyword"] = ""
