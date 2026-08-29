@@ -847,7 +847,7 @@ elif selected == "➕ データ追加・編集":
             with st.form("char_form", clear_on_submit=True):
                 c_id = st.text_input("キャラクターID", placeholder="例: 001")
                 c_name = st.text_input("名前（必須）", placeholder="例: モンキー・D・ルフィ")
-                c_img = st.text_input("画像ファイル名 / URL", placeholder="例: luffy.png")
+                c_img = st.text_input("キャラクター画像（ファイル名 / URL）", placeholder="例: luffy.png")
                 c_nick = st.text_input("異名・通り名", placeholder="例: 麦わらのルフィ")
                 c_fruit = st.text_input("悪魔の実", placeholder="例: ヒトヒトの実 モデル『ニカ』")
                 c_ftype = st.selectbox("悪魔の実の系統", ["", "ゾオン系", "パラミシア系", "ロギア系", "身体特徴・その他"])
@@ -875,7 +875,13 @@ elif selected == "➕ データ追加・編集":
             st.markdown("##### 一問一答クイズの追加（4択から1つを選択）")
             with st.form("form_1to1", clear_on_submit=True):
                 q_text = st.text_area("問題文（必須）", placeholder="例：麦わらの一味の航海士は誰？")
-                q_img = st.text_input("画像ファイル名 / URL（任意）")
+                
+                col_img1, col_img2 = st.columns(2)
+                with col_img1:
+                    q_img = st.text_input("問題画像（ファイル名 / URL）", placeholder="例: q_nami.png")
+                with col_img2:
+                    a_img = st.text_input("正答・解説画像（ファイル名 / URL）", placeholder="例: a_nami.png")
+
                 c1, c2 = st.columns(2)
                 with c1:
                     opt1 = st.text_input("選択肢 1")
@@ -894,7 +900,9 @@ elif selected == "➕ データ追加・編集":
                         new_item = {
                             "type": "一問一答",
                             "question": q_text,
-                            "image": q_img,
+                            "question_image": q_img,
+                            "answer_image": a_img,
+                            "image": q_img or a_img,  # 後方互換用
                             "option1": opt1, "option2": opt2, "option3": opt3, "option4": opt4,
                             "answer": ans_map[correct_opt],
                             "explanation": exp_text
@@ -909,7 +917,13 @@ elif selected == "➕ データ追加・編集":
             st.markdown("##### 一問多答クイズの追加（4択から正解を複数選択）")
             with st.form("form_multi", clear_on_submit=True):
                 q_text = st.text_area("問題文（必須）", placeholder="例：悪魔の実の能力者をすべて選べ。")
-                q_img = st.text_input("画像ファイル名 / URL（任意）")
+                
+                col_img1, col_img2 = st.columns(2)
+                with col_img1:
+                    q_img = st.text_input("問題画像（ファイル名 / URL）")
+                with col_img2:
+                    a_img = st.text_input("正答・解説画像（ファイル名 / URL）")
+
                 c1, c2 = st.columns(2)
                 with c1:
                     opt1 = st.text_input("選択肢 1")
@@ -936,7 +950,9 @@ elif selected == "➕ データ追加・編集":
                         new_item = {
                             "type": "一問多答",
                             "question": q_text,
-                            "image": q_img,
+                            "question_image": q_img,
+                            "answer_image": a_img,
+                            "image": q_img or a_img,
                             "option1": opt1, "option2": opt2, "option3": opt3, "option4": opt4,
                             "answer": "、".join(answers),
                             "explanation": exp_text
@@ -951,7 +967,13 @@ elif selected == "➕ データ追加・編集":
             st.markdown("##### 順序選択クイズの追加（4つの選択肢を正しい順番に並べ替え）")
             with st.form("form_order", clear_on_submit=True):
                 q_text = st.text_area("問題文（必須）", placeholder="例：次の出来事を発生順に並べ替えよ。")
-                q_img = st.text_input("画像ファイル名 / URL（任意）")
+                
+                col_img1, col_img2 = st.columns(2)
+                with col_img1:
+                    q_img = st.text_input("問題画像（ファイル名 / URL）")
+                with col_img2:
+                    a_img = st.text_input("正答・解説画像（ファイル名 / URL）")
+
                 c1, c2 = st.columns(2)
                 with c1:
                     opt1 = st.text_input("選択肢 1")
@@ -968,7 +990,9 @@ elif selected == "➕ データ追加・編集":
                         new_item = {
                             "type": "順序選択",
                             "question": q_text,
-                            "image": q_img,
+                            "question_image": q_img,
+                            "answer_image": a_img,
+                            "image": q_img or a_img,
                             "option1": opt1, "option2": opt2, "option3": opt3, "option4": opt4,
                             "answer": order_ans,
                             "explanation": exp_text
@@ -983,7 +1007,12 @@ elif selected == "➕ データ追加・編集":
             st.markdown("##### 6文字並べ替えクイズの追加")
             with st.form("form_6char", clear_on_submit=True):
                 q_text = st.text_area("問題文（必須）", placeholder="例：アラバスタ王国の王女の名前は？")
-                q_img = st.text_input("画像ファイル名 / URL（任意）")
+                
+                col_img1, col_img2 = st.columns(2)
+                with col_img1:
+                    q_img = st.text_input("問題画像（ファイル名 / URL）")
+                with col_img2:
+                    a_img = st.text_input("正答・解説画像（ファイル名 / URL）")
                 
                 cols = st.columns(6)
                 char_inputs = [cols[i].text_input(f"文字{i+1}", max_chars=1, key=f"c6_{i}") for i in range(6)]
@@ -996,7 +1025,9 @@ elif selected == "➕ データ追加・編集":
                         new_item = {
                             "type": "6文字並べ替え",
                             "question": q_text,
-                            "image": q_img,
+                            "question_image": q_img,
+                            "answer_image": a_img,
+                            "image": q_img or a_img,
                             "option1": char_inputs[0], "option2": char_inputs[1], "option3": char_inputs[2],
                             "option4": char_inputs[3], "option5": char_inputs[4], "option6": char_inputs[5],
                             "answer": correct_word,
@@ -1012,7 +1043,12 @@ elif selected == "➕ データ追加・編集":
             st.markdown("##### 組み合わせクイズの追加（左右3つずつのペア作成）")
             with st.form("form_pair", clear_on_submit=True):
                 q_text = st.text_area("問題文（必須）", placeholder="例：キャラクターと対応する悪魔の実の正しい組み合わせを作れ。")
-                q_img = st.text_input("画像ファイル名 / URL（任意）")
+                
+                col_img1, col_img2 = st.columns(2)
+                with col_img1:
+                    q_img = st.text_input("問題画像（ファイル名 / URL）")
+                with col_img2:
+                    a_img = st.text_input("正答・解説画像（ファイル名 / URL）")
                 
                 st.write("**ペア1**")
                 p1_col1, p1_col2 = st.columns(2)
@@ -1037,7 +1073,9 @@ elif selected == "➕ データ追加・編集":
                         new_item = {
                             "type": "組み合わせ",
                             "question": q_text,
-                            "image": q_img,
+                            "question_image": q_img,
+                            "answer_image": a_img,
+                            "image": q_img or a_img,
                             "left1": l1, "right1": r1,
                             "left2": l2, "right2": r2,
                             "left3": l3, "right3": r3,
@@ -1054,7 +1092,13 @@ elif selected == "➕ データ追加・編集":
             st.markdown("##### 自由記述クイズの追加")
             with st.form("form_free", clear_on_submit=True):
                 q_text = st.text_area("問題文（必須）", placeholder="例：アラバスタ王国の反乱軍リーダーの名前は？")
-                q_img = st.text_input("画像ファイル名 / URL（任意）")
+                
+                col_img1, col_img2 = st.columns(2)
+                with col_img1:
+                    q_img = st.text_input("問題画像（ファイル名 / URL）", placeholder="例: q_kohza.png")
+                with col_img2:
+                    a_img = st.text_input("正答・解説画像（ファイル名 / URL）", placeholder="例: a_kohza.png")
+
                 ans_text = st.text_input("正解（複数の表記を許可する場合は「、」区切り）", placeholder="例: コーザ、コーザ殿")
                 exp_text = st.text_area("解説")
 
@@ -1063,7 +1107,9 @@ elif selected == "➕ データ追加・編集":
                         new_item = {
                             "type": "自由記述",
                             "question": q_text,
-                            "image": q_img,
+                            "question_image": q_img,
+                            "answer_image": a_img,
+                            "image": q_img or a_img,
                             "answer": ans_text,
                             "explanation": exp_text
                         }
