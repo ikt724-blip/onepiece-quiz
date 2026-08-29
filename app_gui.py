@@ -689,7 +689,6 @@ elif selected == "🔍 AI検索モード":
             placeholder="例: ルフィ、バギー、悪魔の実、シャンクス",
         )
 
-        # 検索フィルタリング
         if search_query:
             mask = (
                 df_all.astype(str)
@@ -710,11 +709,9 @@ elif selected == "🔍 AI検索モード":
             if "search_selected_index" not in st.session_state:
                 st.session_state["search_selected_index"] = 0
 
-            # 選択インデックスの範囲調整
             sel_idx = min(st.session_state["search_selected_index"], len(filtered_df) - 1)
             selected_item = filtered_df.iloc[sel_idx]
 
-            # 選択中の詳細・画像プレビューカード
             c_name = get_clean_str(selected_item.get("name") or selected_item.get("名前")) or "詳細情報"
             c_id = get_clean_str(selected_item.get("characterid"))
 
@@ -754,9 +751,8 @@ elif selected == "🔍 AI検索モード":
                     st.write(f"**解説:** {exp}")
 
             st.write("")
-            st.caption(f"💡 一覧表の左端のラジオボタンをクリックして行を選択すると、上の詳細画像が切り替わります。（検索結果: {len(filtered_df)} 件）")
+            st.caption(f"💡 一覧表の行を選択（ラジオボタン）すると、上の詳細画像が切り替わります。（検索結果: {len(filtered_df)} 件）")
 
-            # テーブル行選択連動
             search_event = st.dataframe(
                 filtered_df,
                 on_select="rerun",
@@ -840,7 +836,7 @@ elif selected == "➕ データ追加・編集":
                     with col_target:
                         ans_val = st.text_input(
                             f"正解 {i+1}",
-                            placeholder=f"例：正解{i+1}",
+                            placeholder="例：正解",
                             key=f"ans_input_{i}",
                         )
                         ans_inputs.append(ans_val)
@@ -929,7 +925,7 @@ elif selected == "➕ データ追加・編集":
                         st.error("必要な項目を入力してください。")
 
     # ----------------------------------------------------
-    # 【2. データの編集】（表を1つにまとめた単一統合エディタ）
+    # 【2. データの編集】
     # ----------------------------------------------------
     with main_tab2:
         st.subheader("✏️ データの確認・画像チェック・リアルタイム編集")
@@ -973,7 +969,7 @@ elif selected == "➕ データ追加・編集":
 
             sub_edit_tab1, sub_edit_tab2 = st.tabs(["👥 キャラクターマスター", "📝 問題集データ"])
 
-            # 2-1. キャラクターマスター編集 (表を1つに統合)
+            # 2-1. キャラクターマスター編集
             with sub_edit_tab1:
                 st.markdown("##### 👥 キャラクターマスター 一覧・編集")
                 if char_df.empty:
@@ -982,7 +978,6 @@ elif selected == "➕ データ追加・編集":
                     if "selected_char_index" not in st.session_state:
                         st.session_state["selected_char_index"] = 0
 
-                    # クイック選択ボタン
                     btn_cols = st.columns(min(len(char_df), 6))
                     for i, row in char_df.head(6).iterrows():
                         c_name = get_clean_str(row.get("name") or row.get("名前")) or f"キャラ{i+1}"
@@ -991,7 +986,6 @@ elif selected == "➕ データ追加・編集":
                                 st.session_state["selected_char_index"] = i
                                 st.rerun()
 
-                    # プレビュー
                     curr_char_idx = min(st.session_state["selected_char_index"], len(char_df) - 1)
                     sel_row = char_df.iloc[curr_char_idx]
                     char_label = get_clean_str(sel_row.get('name') or sel_row.get('名前'))
@@ -1009,42 +1003,44 @@ elif selected == "➕ データ追加・編集":
                         st.write(f"**画像ファイル名/URL:** `{get_clean_str(sel_row.get('image') or sel_row.get('画像'))}`")
 
                     st.write("")
-                    st.caption("💡 行を選択（左端）すると上の画像が切り替わり、そのままセルを直接編集することも可能です。")
+                    st.caption("💡 一覧表の左端ラジオボタンで行を選択すると、上の画像が切り替わります。")
 
-                    # 選択機能付きの1つの統合エディタ（st.data_editor）
-                    edited_char = st.data_editor(
+                    # 選択専用テーブル
+                    char_event = st.dataframe(
                         char_df,
                         on_select="rerun",
                         selection_mode="single-row",
-                        num_rows="dynamic",
                         use_container_width=True,
-                        key="unified_char_editor"
+                        key="df_char_select"
                     )
 
-                    # 行選択イベントの検知
-                    if isinstance(edited_char, dict) and "selection" in edited_char:
-                        selected_rows = edited_char["selection"].get("rows", [])
-                        if selected_rows:
-                            sel_r = selected_rows[0]
-                            if sel_r != st.session_state["selected_char_index"]:
-                                st.session_state["selected_char_index"] = sel_r
-                                st.rerun()
-                        edited_char_df = edited_char.get("dataframe", char_df)
-                    else:
-                        edited_char_df = edited_char
+                    if char_event and hasattr(char_event, "selection") and char_event.selection.get("rows"):
+                        sel_r = char_event.selection["rows"][0]
+                        if sel_r != st.session_state["selected_char_index"]:
+                            st.session_state["selected_char_index"] = sel_r
+                            st.rerun()
 
-                    buffer_char = io.BytesIO()
-                    with pd.ExcelWriter(buffer_char, engine="openpyxl") as writer:
-                        edited_char_df.to_excel(writer, index=False)
+                    # 編集用アコーディオン（必要に応じて開いて編集可能）
+                    with st.expander("🛠️ データを直接編集する（セル編集・行の追加削除）"):
+                        edited_char = st.data_editor(
+                            char_df,
+                            num_rows="dynamic",
+                            use_container_width=True,
+                            key="editor_char_data",
+                        )
+                        
+                        buffer_char = io.BytesIO()
+                        with pd.ExcelWriter(buffer_char, engine="openpyxl") as writer:
+                            edited_char.to_excel(writer, index=False)
 
-                    st.download_button(
-                        label="📥 キャラクターマスターをExcel出力 (`character_master.xlsx`)",
-                        data=buffer_char.getvalue(),
-                        file_name="character_master.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    )
+                        st.download_button(
+                            label="📥 キャラクターマスターをExcel出力 (`character_master.xlsx`)",
+                            data=buffer_char.getvalue(),
+                            file_name="character_master.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        )
 
-            # 2-2. 問題集データ編集 (表を1つに統合)
+            # 2-2. 問題集データ編集
             with sub_edit_tab2:
                 st.markdown("##### 📝 記述・並び替え問題集 一覧・編集")
                 if quiz_df.empty:
@@ -1068,39 +1064,42 @@ elif selected == "➕ データ追加・編集":
                         st.write(f"**画像ファイル名/URL:** `{get_clean_str(sel_q_row.get('image') or sel_q_row.get('画像'))}`")
 
                     st.write("")
-                    st.caption("💡 行を選択（左端）すると上のプレビューが切り替わり、そのままセルを直接編集することも可能です。")
+                    st.caption("💡 一覧表の左端ラジオボタンで行を選択すると、上のプレビューが切り替わります。")
 
-                    # 選択機能付きの1つの統合エディタ（st.data_editor）
-                    edited_quiz = st.data_editor(
+                    # 選択専用テーブル
+                    quiz_event = st.dataframe(
                         quiz_df,
                         on_select="rerun",
                         selection_mode="single-row",
-                        num_rows="dynamic",
                         use_container_width=True,
-                        key="unified_quiz_editor"
+                        key="df_quiz_select"
                     )
 
-                    if isinstance(edited_quiz, dict) and "selection" in edited_quiz:
-                        selected_q_rows = edited_quiz["selection"].get("rows", [])
-                        if selected_q_rows:
-                            sel_q_r = selected_q_rows[0]
-                            if sel_q_r != st.session_state["selected_quiz_index"]:
-                                st.session_state["selected_quiz_index"] = sel_q_r
-                                st.rerun()
-                        edited_quiz_df = edited_quiz.get("dataframe", quiz_df)
-                    else:
-                        edited_quiz_df = edited_quiz
+                    if quiz_event and hasattr(quiz_event, "selection") and quiz_event.selection.get("rows"):
+                        sel_q_r = quiz_event.selection["rows"][0]
+                        if sel_q_r != st.session_state["selected_quiz_index"]:
+                            st.session_state["selected_quiz_index"] = sel_q_r
+                            st.rerun()
 
-                    buffer_quiz = io.BytesIO()
-                    with pd.ExcelWriter(buffer_quiz, engine="openpyxl") as writer:
-                        edited_quiz_df.to_excel(writer, index=False)
+                    # 編集用アコーディオン
+                    with st.expander("🛠️ データを直接編集する（セル編集・行の追加削除）"):
+                        edited_quiz = st.data_editor(
+                            quiz_df,
+                            num_rows="dynamic",
+                            use_container_width=True,
+                            key="editor_quiz_data",
+                        )
 
-                    st.download_button(
-                        label="📥 問題集データをExcel出力 (`quiz_data.xlsx`)",
-                        data=buffer_quiz.getvalue(),
-                        file_name="quiz_data.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    )
+                        buffer_quiz = io.BytesIO()
+                        with pd.ExcelWriter(buffer_quiz, engine="openpyxl") as writer:
+                            edited_quiz.to_excel(writer, index=False)
+
+                        st.download_button(
+                            label="📥 問題集データをExcel出力 (`quiz_data.xlsx`)",
+                            data=buffer_quiz.getvalue(),
+                            file_name="quiz_data.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        )
 
             st.write("")
             if st.button("🔄 一時追加データ・検索フィルターをリセット"):
