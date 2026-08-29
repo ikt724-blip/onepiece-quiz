@@ -37,10 +37,39 @@ def load_all_data():
     return merged_df
 
 
-# 画像表示ヘルパー関数
-def display_question_image(q_data, width=300, caption=None):
-    """画像パスを探して表示する関数"""
-    img_name = get_clean_str(q_data.get("image") or q_data.get("画像"))
+# 有効文字列判定ヘルパー
+def get_clean_str(val):
+    """NaNやNone、空文字を排除して正しい文字列を返す"""
+    if pd.isna(val) or val is None:
+        return ""
+    s = str(val).strip()
+    if s.lower() in ["nan", "none", "<na>"]:
+        return ""
+    return s
+
+
+# 画像保存用ヘルパー関数
+def save_uploaded_image(uploaded_file):
+    """アップロードされた画像を ./images/ フォルダに保存してファイル名を返す"""
+    if uploaded_file is None:
+        return ""
+    os.makedirs("images", exist_ok=True)
+    file_path = os.path.join("images", uploaded_file.name)
+    with open(file_path, "wb") as f:
+        f.write(uploaded_file.getbuffer())
+    return uploaded_file.name
+
+
+# 画像表示ヘルパー関数（問題用・正解用切り替え対応）
+def display_question_image(q_data, width=350, caption=None, is_correct_view=False):
+    """画像パスを探して表示する関数（is_correct_view=True で正解画像の表示を優先）"""
+    img_name = ""
+    if is_correct_view:
+        img_name = get_clean_str(q_data.get("correct_image") or q_data.get("正解画像"))
+
+    if not img_name:
+        img_name = get_clean_str(q_data.get("image") or q_data.get("画像"))
+
     if img_name:
         imgPath = (
             img_name
@@ -48,7 +77,7 @@ def display_question_image(q_data, width=300, caption=None):
             else os.path.join("images", img_name)
         )
         if os.path.exists(imgPath):
-            st.image(imgPath, width=width, caption=caption)
+            st.image(imgPath, width=width, caption=caption or ("【正解画像】" if is_correct_view else None))
             return True
     return False
 
@@ -78,7 +107,6 @@ def get_correct_answers_list(q, correct_ans_str):
 # 正解判定共通ロジック (順不同対応)
 def check_answers_multi(user_inputs, correct_answers):
     """複数入力された回答と正解リストを順不同で照合"""
-    # 空白除去
     user_clean = [str(u).strip() for u in user_inputs if str(u).strip()]
     correct_clean = [str(c).strip() for c in correct_answers if str(c).strip()]
 
@@ -86,17 +114,6 @@ def check_answers_multi(user_inputs, correct_answers):
         return False
 
     return set(user_clean) == set(correct_clean)
-
-
-# 有効文字列判定ヘルパー
-def get_clean_str(val):
-    """NaNやNone、空文字を排除して正しい文字列を返す"""
-    if pd.isna(val) or val is None:
-        return ""
-    s = str(val).strip()
-    if s.lower() in ["nan", "none", "<na>"]:
-        return ""
-    return s
 
 
 # キャラマスターデータから問題文と正解を確定させるロジック
@@ -333,6 +350,10 @@ elif selected == "📖 練習モード":
             st.session_state.p_score = 0
         if "p_user_answers" not in st.session_state:
             st.session_state.p_user_answers = []
+        if "p_submitted" not in st.session_state:
+            st.session_state.p_submitted = False
+        if "p_last_is_correct" not in st.session_state:
+            st.session_state.p_last_is_correct = False
 
         if not st.session_state.practice_started:
             st.success(
@@ -376,6 +397,7 @@ elif selected == "📖 練習モード":
                 st.session_state.p_curr_idx = 0
                 st.session_state.p_score = 0
                 st.session_state.p_user_answers = []
+                st.session_state.p_submitted = False
                 st.session_state.practice_started = True
                 st.rerun()
 
@@ -414,16 +436,16 @@ elif selected == "📖 練習モード":
                 question_text, correct_ans_raw = format_question_and_answer(q)
                 st.info(f"**【問題】**\n{question_text}")
 
-                is_char_q = "このキャラクターの名前は？" in question_text
-                if is_char_q:
-                    display_question_image(q)
+                # 回答前の画像表示 (正解表示中でない場合)
+                if not st.session_state.p_submitted:
+                    display_question_image(q, is_correct_view=False)
 
                 is_sort = (
                     q.get("type") == "並び替え"
                     or "option1" in q
                     and pd.notna(q.get("option1"))
                 )
-                if is_sort:
+                if is_sort and not st.session_state.p_submitted:
                     st.write("【選択肢】")
                     c1, c2 = st.columns(2)
                     with c1:
@@ -433,68 +455,82 @@ elif selected == "📖 練習モード":
                         st.write(f"3. {q.get('option3', '')}")
                         st.write(f"4. {q.get('option4', '')}")
 
-                # 正解リストの抽出と入力欄数の決定
                 correct_list = get_correct_answers_list(q, correct_ans_raw)
                 num_inputs = len(correct_list)
 
-                with st.form(f"practice_form_{curr_idx}"):
-                    user_inputs = []
-                    if num_inputs > 1 and not is_sort:
-                        st.caption(f"💡 解答欄が **{num_inputs}つ** あります（順不同）。")
-                        for i in range(num_inputs):
+                if not st.session_state.p_submitted:
+                    with st.form(f"practice_form_{curr_idx}"):
+                        user_inputs = []
+                        if num_inputs > 1 and not is_sort:
+                            st.caption(f"💡 解答欄が **{num_inputs}つ** あります（順不同）。")
+                            for i in range(num_inputs):
+                                u_in = st.text_input(
+                                    f"解答 {i+1}",
+                                    key=f"p_ans_{curr_idx}_{i}",
+                                    placeholder=f"解答{i+1}を記入",
+                                )
+                                user_inputs.append(u_in)
+                        else:
                             u_in = st.text_input(
-                                f"解答 {i+1}",
-                                key=f"p_ans_{curr_idx}_{i}",
-                                placeholder=f"解答{i+1}を記入",
+                                "解答を入力",
+                                placeholder="（並び替えは『2431』のように番号で入力）"
+                                if is_sort
+                                else "ここに解答を記入",
                             )
                             user_inputs.append(u_in)
-                    else:
-                        u_in = st.text_input(
-                            "解答を入力",
-                            placeholder="（並び替えは『2431』のように番号で入力）"
-                            if is_sort
-                            else "ここに解答を記入",
-                        )
-                        user_inputs.append(u_in)
 
-                    sub_c1, sub_c2 = st.columns(2)
-                    with sub_c1:
-                        submitted = st.form_submit_button(
-                            "回答する", use_container_width=True
-                        )
-                    with sub_c2:
-                        passed = st.form_submit_button(
-                            "パス", use_container_width=True
-                        )
+                        sub_c1, sub_c2 = st.columns(2)
+                        with sub_c1:
+                            submitted = st.form_submit_button(
+                                "回答する", use_container_width=True
+                            )
+                        with sub_c2:
+                            passed = st.form_submit_button(
+                                "パス", use_container_width=True
+                            )
 
-                if submitted:
-                    is_correct = check_answers_multi(user_inputs, correct_list)
+                    if submitted:
+                        is_correct = check_answers_multi(user_inputs, correct_list)
+                        st.session_state.p_last_is_correct = is_correct
+                        st.session_state.p_submitted = True
+                        disp_ans = "、".join(correct_list)
+
+                        if is_correct:
+                            st.session_state.p_score += 1
+
+                        st.session_state.p_user_answers.append(
+                            {
+                                "問題": question_text,
+                                "あなたの解答": "、".join([u for u in user_inputs if u]),
+                                "正解": disp_ans,
+                                "判定": "⭕ 正解" if is_correct else "❌ 不正解",
+                            }
+                        )
+                        st.rerun()
+
+                    elif passed:
+                        st.session_state.p_curr_idx += 1
+                        st.rerun()
+
+                else:
+                    # 判定後の結果 & 正解画像の表示
                     disp_ans = "、".join(correct_list)
-
-                    if is_correct:
+                    if st.session_state.p_last_is_correct:
                         st.success("⭕ 正解！")
-                        st.session_state.p_score += 1
+                        # 正解画像があれば優先切り替え表示
+                        display_question_image(q, is_correct_view=True)
                     else:
                         st.error(f"❌ 不正解... 正解は: **{disp_ans}**")
+                        display_question_image(q, is_correct_view=False)
 
                     exp = get_clean_str(q.get("explanation") or q.get("解説"))
                     if exp:
-                        st.caption(f"💡 【解説】: {exp}")
+                        st.info(f"💡 **【解説】**: {exp}")
 
-                    st.session_state.p_user_answers.append(
-                        {
-                            "問題": question_text,
-                            "あなたの解答": "、".join([u for u in user_inputs if u]),
-                            "正解": disp_ans,
-                            "判定": "⭕ 正解" if is_correct else "❌ 不正解",
-                        }
-                    )
-                    st.session_state.p_curr_idx += 1
-                    st.button("次の問題へ ➡")
-
-                elif passed:
-                    st.session_state.p_curr_idx += 1
-                    st.rerun()
+                    if st.button("次の問題へ ➡", use_container_width=True):
+                        st.session_state.p_submitted = False
+                        st.session_state.p_curr_idx += 1
+                        st.rerun()
 
                 if st.button("練習を中断する"):
                     st.session_state.practice_started = False
@@ -601,9 +637,7 @@ elif selected == "🏆 本番模試（50問/60分）":
                 question_text, correct_ans_raw = format_question_and_answer(q)
                 st.info(f"**【問題】**\n{question_text}")
 
-                is_char_q = "このキャラクターの名前は？" in question_text
-                if is_char_q:
-                    display_question_image(q)
+                display_question_image(q, is_correct_view=False)
 
                 is_sort = (
                     q.get("type") == "並び替え"
@@ -720,32 +754,35 @@ elif selected == "➕ データ追加・編集":
 
     with tab1:
         st.subheader("キャラクターマスター追加")
-        if not df_all.empty:
-            char_cols = [c for c in df_all.columns if c != "source_file"]
-        else:
-            char_cols = [
-                "characterid",
-                "name",
-                "image",
-                "nickname",
-                "devil_fruit",
-                "fruit_type",
-                "question",
-            ]
+        
+        up_img = st.file_uploader("🖼️ キャラクター画像を添付", type=["png", "jpg", "jpeg"], key="upload_char_img")
+        uploaded_img_name = save_uploaded_image(up_img)
 
         with st.form("char_form", clear_on_submit=True):
-            input_char = {}
-            for col in char_cols:
-                input_char[col] = st.text_input(f"{col}", key=f"char_{col}")
-            input_char["type"] = "キャラデータ"
+            c_name = st.text_input("名前 (name)", placeholder="例: モンキー・D・ルフィ")
+            c_nickname = st.text_input("異名 (nickname)", placeholder="例: 麦わらのルフィ")
+            c_fruit = st.text_input("悪魔の実 (devil_fruit)", placeholder="例: ヒトヒトの実 モデル『ニカ』")
+            c_fruit_type = st.text_input("悪魔の実の種別 (fruit_type)", placeholder="例: ゾオン系 幻獣種")
+            c_affil = st.text_input("所属 (affiliation)", placeholder="例: 麦わらの一味")
+            c_question = st.text_input("カスタム問題文 (question)", placeholder="空欄の場合デフォルト表示")
 
             if st.form_submit_button("キャラデータを追加"):
-                new_row = pd.DataFrame([input_char])
+                new_item = {
+                    "type": "キャラデータ",
+                    "name": c_name,
+                    "nickname": c_nickname,
+                    "devil_fruit": c_fruit,
+                    "fruit_type": c_fruit_type,
+                    "affiliation": c_affil,
+                    "question": c_question,
+                    "image": uploaded_img_name,
+                }
+                new_row = pd.DataFrame([new_item])
                 st.session_state["added_data"] = pd.concat(
                     [st.session_state["added_data"], new_row], ignore_index=True
                 )
                 st.success(
-                    "キャラデータを一時追加しました！下の「キャラクターマスター」タブから確認・編集できます。"
+                    f"キャラデータ（画像: {uploaded_img_name or 'なし'}）を一時追加しました！"
                 )
 
     with tab2:
@@ -756,6 +793,14 @@ elif selected == "➕ データ追加・編集":
             index=0,
             help="複数解答がある場合は項目数を変更してください。",
         )
+
+        col_img1, col_img2 = st.columns(2)
+        with col_img1:
+            q_img = st.file_uploader("🖼️ 問題用画像を添付", type=["png", "jpg", "jpeg"], key="upload_q_img")
+            q_img_name = save_uploaded_image(q_img)
+        with col_img2:
+            c_img = st.file_uploader("🖼️ 正解表示用画像を添付 (任意)", type=["png", "jpg", "jpeg"], key="upload_c_img")
+            c_img_name = save_uploaded_image(c_img)
 
         with st.form("descriptive_form", clear_on_submit=True):
             q_text = st.text_area(
@@ -795,6 +840,8 @@ elif selected == "➕ データ追加・編集":
                         "answer_count": len(valid_answers),
                         "explanation": exp_text,
                         "genre": genre,
+                        "image": q_img_name,
+                        "correct_image": c_img_name,
                     }
                     for idx, a_val in enumerate(ans_inputs):
                         new_item[f"answer_{idx+1}"] = a_val
