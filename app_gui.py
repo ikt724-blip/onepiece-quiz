@@ -48,15 +48,21 @@ def get_clean_str(val):
 
 
 # 画像表示ヘルパー関数（URL・ローカルパス両対応）
-def display_question_image(q_data, width=300, caption=None):
-    """画像パスまたはURLを探して表示する関数"""
+def display_question_image(q_data, width=300, caption=None, show_caption=False):
+    """画像パスまたはURLを探して表示する関数（show_caption=Falseでファイル名を絶対に非表示）"""
     img_val = get_clean_str(q_data.get("image") or q_data.get("画像"))
     if not img_val:
         st.caption("📷 画像データなし")
         return False
 
+    # show_captionがTrueの時だけキャプションを設定（Falseなら無条件でNoneにする）
+    if show_caption:
+        cap = caption or f"ファイル: {img_val}"
+    else:
+        cap = None
+
     if img_val.startswith("http://") or img_val.startswith("https://"):
-        st.image(img_val, width=width, caption=caption or f"参照URL: {img_val}")
+        st.image(img_val, width=width, caption=cap)
         return True
 
     imgPath = (
@@ -65,10 +71,10 @@ def display_question_image(q_data, width=300, caption=None):
         else os.path.join("images", img_val)
     )
     if os.path.exists(imgPath):
-        st.image(imgPath, width=width, caption=caption or f"ファイル: {img_val}")
+        st.image(imgPath, width=width, caption=cap)
         return True
     
-    st.caption(f"⚠️ 画像ファイルが見つかりません: {img_val}")
+    st.caption("⚠️ 画像ファイルが見つかりません")
     return False
 
 
@@ -411,9 +417,8 @@ elif selected == "📖 練習モード":
                 with c_top2:
                     if st.button("🛠️ この問題を修正する"):
                         question_text, _ = format_question_and_answer(q)
-                        # 検索キーワードと編集タブへの直接遷移用フラグを設定
                         st.session_state["edit_search_keyword"] = question_text
-                        st.session_state["edit_active_tab"] = 1  # 2つ目の編集タブを指定
+                        st.session_state["edit_active_tab"] = 1
                         st.session_state["current_nav"] = "➕ データ追加・編集"
                         st.rerun()
 
@@ -422,7 +427,8 @@ elif selected == "📖 練習モード":
 
                 is_char_q = "このキャラクターの名前は？" in question_text or bool(q.get("image") or q.get("画像"))
                 if is_char_q:
-                    display_question_image(q)
+                    # 出題画面のため show_caption=False でファイル名を完全非表示
+                    display_question_image(q, show_caption=False)
 
                 is_sort = (
                     q.get("type") == "並び替え"
@@ -608,7 +614,8 @@ elif selected == "🏆 本番模試（50問/60分）":
 
                 is_char_q = "このキャラクターの名前は？" in question_text or bool(q.get("image") or q.get("画像"))
                 if is_char_q:
-                    display_question_image(q)
+                    # 出題画面のため show_caption=False でファイル名を完全非表示
+                    display_question_image(q, show_caption=False)
 
                 is_sort = (
                     q.get("type") == "並び替え"
@@ -720,7 +727,8 @@ elif selected == "🔍 AI検索モード":
             
             card_col1, card_col2 = st.columns([1, 2])
             with card_col1:
-                display_question_image(selected_item, width=280)
+                # 検索モード画面では確認用に show_caption=True
+                display_question_image(selected_item, width=280, show_caption=True)
             with card_col2:
                 name_val = get_clean_str(selected_item.get("name") or selected_item.get("名前"))
                 if name_val:
@@ -777,10 +785,8 @@ elif selected == "➕ データ追加・編集":
     if "added_data" not in st.session_state:
         st.session_state["added_data"] = pd.DataFrame()
 
-    # 外部（練習モード）からの遷移時はデフォルトで「データ編集」タブを開く
     default_tab_idx = st.session_state.pop("edit_active_tab", 0)
 
-    # st.tabsは直接初期アクティブタブを指定できないため、Radioメニュー等と組み合わせて完全制御
     tab_selection = st.radio(
         "機能切替",
         ["➕ 1. データの追加", "✏️ 2. データの編集"],
@@ -948,7 +954,6 @@ elif selected == "➕ データ追加・編集":
             placeholder="キーワード（名前・問題文・正解など）で検索",
             key="edit_search_keyword_input"
         )
-        # 入力内容をsession_stateへ保持
         st.session_state["edit_search_keyword"] = filter_kw
 
         target_data = pd.concat(
@@ -1008,7 +1013,8 @@ elif selected == "➕ データ追加・編集":
                     st.info(f"📌 選択中のキャラクター: **{char_label}** {f'(ID: {char_id})' if char_id else ''}")
                     p_col1, p_col2 = st.columns([1, 2])
                     with p_col1:
-                        display_question_image(sel_row, width=280)
+                        # 編集確認画面のため show_caption=True
+                        display_question_image(sel_row, width=280, show_caption=True)
                     with p_col2:
                         st.write(f"**異名/通り名:** {get_clean_str(sel_row.get('nickname') or sel_row.get('異名')) or 'なし'}")
                         st.write(f"**悪魔の実:** {get_clean_str(sel_row.get('devil_fruit') or sel_row.get('悪魔の実')) or 'なし'}")
@@ -1019,7 +1025,6 @@ elif selected == "➕ データ追加・編集":
                     st.write("")
                     st.caption("💡 一覧表の左端ラジオボタンで行を選択すると、上の画像が切り替わります。")
 
-                    # 選択専用テーブル
                     char_event = st.dataframe(
                         char_df,
                         on_select="rerun",
@@ -1034,7 +1039,6 @@ elif selected == "➕ データ追加・編集":
                             st.session_state["selected_char_index"] = sel_r
                             st.rerun()
 
-                    # 編集用アコーディオン
                     with st.expander("🛠️ データを直接編集する（セル編集・行の追加削除）"):
                         edited_char = st.data_editor(
                             char_df,
@@ -1070,7 +1074,8 @@ elif selected == "➕ データ追加・編集":
                     st.info(f"📌 選択中の問題: **第 {curr_q_idx + 1} 問**")
                     qp_col1, qp_col2 = st.columns([1, 2])
                     with qp_col1:
-                        display_question_image(sel_q_row, width=280)
+                        # 編集確認画面のため show_caption=True
+                        display_question_image(sel_q_row, width=280, show_caption=True)
                     with qp_col2:
                         st.write(f"**問題文:** {q_t}")
                         st.write(f"**正解:** {c_a}")
@@ -1080,7 +1085,6 @@ elif selected == "➕ データ追加・編集":
                     st.write("")
                     st.caption("💡 一覧表の左端ラジオボタンで行を選択すると、上のプレビューが切り替わります。")
 
-                    # 選択専用テーブル
                     quiz_event = st.dataframe(
                         quiz_df,
                         on_select="rerun",
@@ -1095,7 +1099,6 @@ elif selected == "➕ データ追加・編集":
                             st.session_state["selected_quiz_index"] = sel_q_r
                             st.rerun()
 
-                    # 編集用アコーディオン
                     with st.expander("🛠️ データを直接編集する（セル編集・行の追加削除）"):
                         edited_quiz = st.data_editor(
                             quiz_df,
