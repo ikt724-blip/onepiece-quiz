@@ -145,11 +145,6 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# URLパラメータによるナビゲーション制御
-query_params = st.query_params
-if "nav" in query_params:
-    st.session_state["current_nav"] = query_params["nav"]
-
 if "current_nav" not in st.session_state:
     st.session_state["current_nav"] = "ホーム"
 
@@ -178,32 +173,27 @@ if st.session_state["current_nav"] == "ホーム":
             except Exception:
                 continue
 
-    # 純粋なHTML/CSSでカードと縦アニメーションを完璧に描画
-    home_html = f"""
+    # CSSデザイン（アニメーション背景＋カード枠＋Streamlitボタン整形）
+    custom_css = """
     <style>
-    @keyframes scroll-vertical {{
-        0% {{ transform: translateY(0); }}
-        100% {{ transform: translateY(-50%); }}
-    }}
+    @keyframes scroll-vertical {
+        0% { transform: translateY(0); }
+        100% { transform: translateY(-50%); }
+    }
 
-    .main-card-container {{
-        position: relative;
-        width: 100%;
+    /* 全体を包むメインカード枠 */
+    .main-card-wrapper {
+        background-color: #121212;
+        border: 2px solid #333;
+        border-radius: 20px;
+        padding: 24px;
         max-width: 800px;
         margin: 0 auto 20px auto;
-        border-radius: 20px;
-        overflow: hidden;
-        border: 2px solid #333;
         box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
-        background-color: #121212;
-        padding: 24px;
-        display: flex;
-        flex-direction: column;
-        gap: 20px;
-    }}
+    }
 
-    /* 上部：画像アニメーション表示領域 */
-    .image-preview-box {{
+    /* アニメーションヘッダー領域 */
+    .image-preview-box {
         position: relative;
         width: 100%;
         height: 180px;
@@ -211,9 +201,10 @@ if st.session_state["current_nav"] == "ホーム":
         overflow: hidden;
         border: 2px solid #ffcc00;
         box-shadow: 0 0 15px rgba(255, 204, 0, 0.2);
-    }}
+        margin-bottom: 20px;
+    }
 
-    .mosaic-bg-scroll {{
+    .mosaic-bg-scroll {
         position: absolute;
         top: 0;
         left: 0;
@@ -222,15 +213,15 @@ if st.session_state["current_nav"] == "ホーム":
         grid-template-columns: repeat(10, 1fr);
         gap: 2px;
         animation: scroll-vertical 25s linear infinite;
-    }}
+    }
 
-    .bg-tile {{
+    .bg-tile {
         width: 100%;
         aspect-ratio: 1 / 1;
         object-fit: cover;
-    }}
+    }
 
-    .banner-overlay {{
+    .banner-overlay {
         position: absolute;
         inset: 0;
         background: rgba(0, 0, 0, 0.55);
@@ -241,58 +232,50 @@ if st.session_state["current_nav"] == "ホーム":
         justify-content: center;
         text-align: center;
         padding: 10px;
-    }}
+    }
 
-    .banner-overlay h1 {{
+    .banner-overlay h1 {
         margin: 0;
         font-size: 2rem;
         color: #ffffff;
         font-weight: 900;
         text-shadow: 2px 2px 6px #000;
-    }}
+    }
 
-    .banner-overlay p {{
+    .banner-overlay p {
         margin: 4px 0 0 0;
         color: #ffcc00;
         font-size: 1rem;
         font-weight: 700;
         letter-spacing: 2px;
-    }}
+    }
 
-    /* 下部：ボタン群 */
-    .button-container {{
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-        width: 100%;
-    }}
-
-    .nav-link-btn {{
-        display: block;
-        width: 100%;
-        padding: 14px;
-        background-color: #ffffff;
+    /* Streamlitボタンをカード内に綺麗にレイアウトするための調整 */
+    div[data-testid="stColumn"] button {
+        height: 52px;
+        font-size: 1.1rem !important;
+        font-weight: 700 !important;
+        background-color: #ffffff !important;
         color: #111111 !important;
-        text-decoration: none !important;
-        text-align: center;
-        border-radius: 10px;
-        font-size: 1.1rem;
-        font-weight: 700;
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-        transition: all 0.2s ease-in-out;
-        box-sizing: border-box;
-    }}
+        border: none !important;
+        border-radius: 10px !important;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3) !important;
+        transition: all 0.2s ease-in-out !important;
+    }
 
-    .nav-link-btn:hover {{
-        background-color: #ffcc00;
+    div[data-testid="stColumn"] button:hover {
+        background-color: #ffcc00 !important;
         color: #000000 !important;
-        transform: translateY(-2px);
-        box-shadow: 0 6px 15px rgba(255, 204, 0, 0.4);
-    }}
+        transform: translateY(-2px) !important;
+        box-shadow: 0 6px 15px rgba(255, 204, 0, 0.4) !important;
+    }
     </style>
+    """
+    st.markdown(custom_css, unsafe_allow_html=True)
 
-    <div class="main-card-container">
-        <!-- アニメーション画像ヘッダー -->
+    # HTMLによる上部ヘッダー（スクロールアニメーション画像）
+    banner_html = f"""
+    <div class="main-card-wrapper">
         <div class="image-preview-box">
             <div class="mosaic-bg-scroll">
                 {grid_imgs_html if grid_imgs_html else '<div style="grid-column: 1/-1; text-align:center; color:#888; padding-top:70px;">（画像をimagesフォルダに入れると表示されます）</div>'}
@@ -303,20 +286,38 @@ if st.session_state["current_nav"] == "ホーム":
                 <p>― 最強のデータベースを脳に刻め ―</p>
             </div>
         </div>
-
-        <!-- ボタン群（カード内） -->
-        <div class="button-container">
-            <a href="?nav=🏆 本番模試（50問/60分）" target="_self" class="nav-link-btn">🏆 本番模試（50問/60分）</a>
-            <a href="?nav=📖 練習モード" target="_self" class="nav-link-btn">💻 練習モード</a>
-            <a href="?nav=🔥 苦手克服" target="_self" class="nav-link-btn">🔥 苦手克服</a>
-            <a href="?nav=🔍 AI検索モード" target="_self" class="nav-link-btn">🔍 AI検索モード</a>
-            <a href="?nav=➕ データ追加・編集" target="_self" class="nav-link-btn">➕ データ追加・編集</a>
-        </div>
     </div>
     """
+    st.markdown(banner_html, unsafe_allow_html=True)
 
-    st.markdown(home_html, unsafe_allow_html=True)
+    # カード内部にStreamlit純正ボタンを正確に配置
+    _, center_col, _ = st.columns([1, 4, 1])
+    with center_col:
+        if st.button("🏆 本番模試（50問/60分）", use_container_width=True):
+            st.session_state["current_nav"] = "🏆 本番模試（50問/60分）"
+            st.rerun()
 
+        st.write("")
+        if st.button("💻 練習モード", use_container_width=True):
+            st.session_state["current_nav"] = "📖 練習モード"
+            st.rerun()
+
+        st.write("")
+        if st.button("🔥 苦手克服", use_container_width=True):
+            st.session_state["current_nav"] = "🔥 苦手克服"
+            st.rerun()
+
+        st.write("")
+        if st.button("🔍 AI検索モード", use_container_width=True):
+            st.session_state["current_nav"] = "🔍 AI検索モード"
+            st.rerun()
+
+        st.write("")
+        if st.button("➕ データ追加・編集", use_container_width=True):
+            st.session_state["current_nav"] = "➕ データ追加・編集"
+            st.rerun()
+
+    st.write("")
     if not df_all.empty:
         st.info(f"📊 現在の登録データ総数: **{len(df_all)}** 件")
     else:
@@ -328,7 +329,6 @@ else:
     with col_back:
         if st.button("🏠 ホームへ戻る", use_container_width=True):
             st.session_state["current_nav"] = "ホーム"
-            st.query_params.clear()
             st.rerun()
 
 # --- 2. 練習モード ---
