@@ -1,65 +1,256 @@
+import base64
 import glob
+import io
+import math
 import os
 import random
-import base64
+import re
+import time
 import pandas as pd
 import streamlit as st
-import streamlit.components.v1 as components
+from PIL import Image
+from streamlit_option_menu import option_menu
 
-# ページ設定
-st.set_page_config(
-    page_title="ONE PIECE ナレッジキング対策",
-    page_icon="🏴‍☠️",
-    layout="wide"
-)
 
-# --- 画像をBase64文字列に変換する関数 ---
+# --- データ読み込み用共通関数 ---
+@st.cache_data
+def load_all_data():
+    """リポジトリ内の全Excelファイルを統合して読み込む"""
+    files = glob.glob("*.xlsx")
+    if not files:
+        return pd.DataFrame()
+
+    df_list = []
+    for f in files:
+        try:
+            temp_df = pd.read_excel(f)
+            temp_df["source_file"] = f
+            df_list.append(temp_df)
+        except Exception:
+            continue
+
+    if not df_list:
+        return pd.DataFrame()
+
+    merged_df = pd.concat(df_list, ignore_index=True)
+    return merged_df
+
+
+# 有効文字列判定ヘルパー
+def get_clean_str(val):
+    """NaNやNone、空文字を排除して正しい文字列を返す"""
+    if pd.isna(val) or val is None:
+        return ""
+    s = str(val).strip()
+    if s.lower() in ["nan", "none", "<na>"]:
+        return ""
+    return s
+
+
+# 画像をBase64に変換（カスタムHTML/CSSアニメーション用）
 def image_to_base64(img_path):
     try:
-        with open(img_path, "rb") as f:
-            return f"data:image/png;base64,{base64.b64encode(f.read()).decode()}"
+        with Image.open(img_path) as img:
+            buffered = io.BytesIO()
+            img_format = img.format if img.format else "PNG"
+            img.save(buffered, format=img_format)
+            img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
+            mime_type = f"image/{img_format.lower()}"
+            return f"data:{mime_type};base64,{img_str}"
     except Exception:
-        return ""
+        return None
 
-# --- Excelデータの読み込み関数 ---
-@st.cache_data
-def load_excel_data():
-    excel_files = glob.glob("*.xlsx") + glob.glob("data/*.xlsx")
-    if not excel_files:
-        return pd.DataFrame()
+
+# --- 🖼️ 画像表示・フォルダ自動探索関数 ---
+def display_question_image(row, width=200, show_caption=True):
+    """
+    指定された行データから画像パスを抽出し、
+    日本語ファイル名でもエラーが出ないよう安全に画像を表示する関数
+    """
+    img_sources = []
+    IMAGE_DIRS = ["images", "img", "static/images", "assets", "data/images", "."]
     
-    dfs = []
-    for f in excel_files:
-        try:
-            df = pd.read_excel(f)
-            dfs.append(df)
-        except Exception:
-            pass
-    
-    if not dfs:
-        return pd.DataFrame()
-        
-    df_all = pd.concat(dfs, ignore_index=True)
-    
-    # 互換性担保：Excelに必要な列がない場合に自動生成（既存データ壊し防止）
-    required_cols = ["問題種別", "問題", "画像_A", "画像_B", "画像", "正解", "解説"]
-    for col in required_cols:
-        if col not in df_all.columns:
-            df_all[col] = None
+    for col in ["question_image", "image", "answer_image", "画像"]:
+        if col in row and pd.notna(row[col]):
+            val = str(row[col]).strip()
+            if val and val.lower() != "nan":
+                for img_item in val.replace("\n", ",").split(","):
+                    cleaned_path = img_item.strip()
+                    if cleaned_path and cleaned_path not in img_sources:
+                        img_sources.append(cleaned_path)
+
+    if not img_sources:
+        st.info("📷 画像データなし")
+        return
+
+    for idx, raw_path in enumerate(img_sources):
+        resolved_path = None
+
+        if raw_path.startswith("http://") or raw_path.startswith("https://"):
+            resolved_path = raw_path
+        else:
+            if os.path.exists(raw_path):
+                resolved_path = raw_path
+            else:
+                filename = os.path.basename(raw_path)
+                for d in IMAGE_DIRS:
+                    test_path = os.path.join(d, filename)
+                    if os.path.exists(test_path):
+                        resolved_path = test_path
+                        break
+
+        cap = None
+        if show_caption:
+            q_text = str(row.get("question") or row.get("name") or "").strip()
+            cap = f"画像 {idx + 1}" if not q_text else f"【画像 {idx + 1}】 {q_text[:20]}"
+
+        if resolved_path:
+            try:
+                if resolved_path.startswith("http"):
+                    st.image(resolved_path, caption=cap, width=width)
+                else:
+                    with Image.open(resolved_path) as img:
+                        img_bytes = img.copy()
+                        if width is None:
+                            st.image(img_bytes, caption=cap, use_container_width="stretch")
+                        else:
+                            st.image(img_bytes, caption=cap, width=width)
+            except Exception as e:
+                st.warning(f"⚠️ 画像の表示エラー: {raw_path} ({e})")
+        else:
+            st.info(f"📷 画像ファイルが見つかりません: `{raw_path}`")
+
+
+# 正解リスト抽出ヘルパー
+def get_correct_answers_list(q, correct_ans_str):
+    """問題データから正解の要素リストを取得する"""
+    answers = []
+    for i in range(1, 10):
+        val = get_clean_str(q.get(f"answer_{i}"))
+        if val:
+            answers.append(val)
             
-    return df_all
+    if not answers and correct_ans_str:
+        if "、" in correct_ans_str or "," in correct_ans_str:
+            answers = [
+                t.strip() for t in re.split(r"[、,]", correct_ans_str) if t.strip()
+            ]
+        else:
+            answers = [correct_ans_str.strip()]
+            
+    return answers
 
-df_all = load_excel_data()
 
-# --- サイドバーメニュー ---
-st.sidebar.title("🏴‍☠️ メニュー")
-selected = st.sidebar.radio("機能を選択", ["ホーム", "クイズ"])
+# 正解判定共通ロジック
+def check_answers_multi(user_inputs, correct_answers):
+    """複数入力された回答と正解リストを順不同で照合"""
+    user_clean = [str(u).strip() for u in user_inputs if str(u).strip()]
+    correct_clean = [str(c).strip() for c in correct_answers if str(c).strip()]
+
+    if len(user_clean) != len(correct_clean):
+        return False
+
+    return set(user_clean) == set(correct_clean)
 
 
-# ==========================================
-# 1. ホーム画面
-# ==========================================
+# キャラマスターデータから問題文と正解を確定させるロジック
+def format_question_and_answer(q):
+    raw_question = get_clean_str(
+        q.get("question") or q.get("問題") or q.get("Question") or q.get("question_text")
+    )
+    name = get_clean_str(
+        q.get("name") or q.get("名前") or q.get("キャラ名") or q.get("Name")
+    )
+    image = get_clean_str(q.get("image") or q.get("画像"))
+    devil_fruit = get_clean_str(
+        q.get("devil_fruit") or q.get("悪魔の実") or q.get("能力")
+    )
+    affiliation = get_clean_str(
+        q.get("affiliation") or q.get("所属") or q.get("組織")
+    )
+    nickname = get_clean_str(
+        q.get("nickname") or q.get("異名") or q.get("通り名")
+    )
+
+    if raw_question:
+        ans = get_clean_str(
+            q.get("answer")
+            or q.get("解答")
+            or q.get("正解")
+            or devil_fruit
+            or name
+        )
+        return raw_question, ans
+
+    if image and name:
+        return "このキャラクターの名前は？", name
+
+    if devil_fruit and name:
+        return f"「{name}」が食べた悪魔の実の名称は？", devil_fruit
+
+    if affiliation and name:
+        return f"「{name}」の主な所属（組織・海賊団など）は？", affiliation
+
+    if nickname and name:
+        return f"「{name}」の異名（通り名）は？", nickname
+
+    if name:
+        return "このキャラクターの名前は？", name
+
+    return "このキャラクターの名前は？", name
+
+
+# --- ページ基本設定 ---
+st.set_page_config(
+    page_title="ONE PIECE ナレッジキング対策", page_icon="🏴‍☠️", layout="wide"
+)
+
+# 画面切り替え用の状態初期化
+if "current_nav" not in st.session_state:
+    st.session_state["current_nav"] = "ホーム"
+
+menu_options = [
+    "ホーム",
+    "📖 練習モード",
+    "🏆 本番模試（50問/60分）",
+    "🔥 苦手克服",
+    "🔍 AI検索モード",
+    "➕ データ追加・編集",
+]
+
+# --- サイドバーナビゲーション ---
+with st.sidebar:
+    st.header("🏴‍☠️ ナビセンター")
+
+    def_idx = (
+        menu_options.index(st.session_state["current_nav"])
+        if st.session_state["current_nav"] in menu_options
+        else 0
+    )
+
+    selected = option_menu(
+        menu_title=None,
+        options=menu_options,
+        icons=[
+            "house",
+            "book",
+            "trophy",
+            "exclamation-triangle",
+            "search",
+            "plus-circle",
+        ],
+        default_index=def_idx,
+        key="nav_menu_main",
+    )
+    st.session_state["current_nav"] = selected
+
+# 全データ取得
+df_all = load_all_data()
+
+# --- 1. ホーム画面 ---
 if selected == "ホーム":
+    import streamlit.components.v1 as components
+
     all_imgs = (
         glob.glob("images/*.png")
         + glob.glob("images/*.jpg")
@@ -165,7 +356,7 @@ if selected == "ホーム":
         .scroll-img {{
             max-width: 100%;
             max-height: 100%;
-            object-fit: contain;
+            object-fit: contain; /* 切り取らずに顔全体をそのまま表示 */
             display: block;
         }}
 
@@ -249,115 +440,12 @@ if selected == "ホーム":
     st.divider()
 
     if df_all.empty:
-        st.warning("現在、読み込めるExcelデータ（.xlsx）がありません。リポジトリにExcelファイルを配置してください。")
+        st.warning(
+            "現在、読み込めるExcelデータ（.xlsx）がありません。リポジトリにExcelファイルを配置してください。"
+        )
     else:
         st.success(f"✅ データベース接続完了: 合計 {len(df_all)} 件の問題データが登録されています。")
         st.info("👈 左側のメニューから機能を選択してください。")
-
-
-# ==========================================
-# 2. クイズ画面
-# ==========================================
-elif selected == "クイズ":
-    st.title("🏴‍☠️ ナレッジキング クイズ")
-
-    if df_all.empty:
-        st.warning("問題データが見つかりません。Excelファイルを配置してください。")
-    else:
-        # セッション状態の初期化
-        if "quiz_idx" not in st.session_state:
-            st.session_state.quiz_idx = 0
-        if "answered" not in st.session_state:
-            st.session_state.answered = False
-        if "user_choice" not in st.session_state:
-            st.session_state.user_choice = None
-        if "is_correct" not in st.session_state:
-            st.session_state.is_correct = False
-
-        # 現在の問題データ取得
-        current_q = df_all.iloc[st.session_state.quiz_idx]
-
-        q_type = str(current_q.get("問題種別", "")).strip()
-        q_text = current_q.get("問題", "")
-        correct_ans = str(current_q.get("正解", "")).strip()
-        explanation = current_q.get("解説", "")
-
-        # 画像パスの判定（旧フォーマットの「画像」列にも対応）
-        img_a_path = str(current_q.get("画像_A", "")) if pd.notna(current_q.get("画像_A")) else str(current_q.get("画像", ""))
-        img_b_path = str(current_q.get("画像_B", "")) if pd.notna(current_q.get("画像_B")) else ""
-
-        # 2択クイズ判定（「問題種別」が2択画像か、画像_Bに有効なパスがある場合）
-        is_two_choice = (q_type == "2択画像") or (img_b_path.strip() != "" and img_b_path != "nan")
-
-        st.subheader(f"第 {st.session_state.quiz_idx + 1} 問 / 全 {len(df_all)} 問")
-        st.markdown(f"### {q_text}")
-
-        # --- 【パターン1】 2択画像クイズ ---
-        if is_two_choice:
-            col1, col2 = st.columns(2)
-
-            with col1:
-                st.markdown("#### **A**")
-                if os.path.exists(img_a_path):
-                    st.image(img_a_path, use_container_width=True)
-                else:
-                    st.info("画像 A なし")
-
-                if not st.session_state.answered:
-                    if st.button("A を選択", key="btn_a", use_container_width=True):
-                        st.session_state.user_choice = "A"
-                        st.session_state.answered = True
-                        st.session_state.is_correct = ("A" == correct_ans.upper())
-                        st.rerun()
-
-            with col2:
-                st.markdown("#### **B**")
-                if os.path.exists(img_b_path):
-                    st.image(img_b_path, use_container_width=True)
-                else:
-                    st.info("画像 B なし")
-
-                if not st.session_state.answered:
-                    if st.button("B を選択", key="btn_b", use_container_width=True):
-                        st.session_state.user_choice = "B"
-                        st.session_state.answered = True
-                        st.session_state.is_correct = ("B" == correct_ans.upper())
-                        st.rerun()
-
-        # --- 【パターン2】 通常の一問一答・テキスト問題 ---
-        else:
-            if os.path.exists(img_a_path):
-                st.image(img_a_path, width=400)
-
-            if not st.session_state.answered:
-                user_input = st.text_input("解答を入力してください", key="input_ans")
-                if st.button("回答する", use_container_width=True):
-                    if user_input:
-                        st.session_state.user_choice = user_input.strip()
-                        st.session_state.answered = True
-                        st.session_state.is_correct = (user_input.strip().lower() == correct_ans.lower())
-                        st.rerun()
-
-        # --- 共通：結果・解説表示処理 ---
-        if st.session_state.answered:
-            st.divider()
-
-            if st.session_state.is_correct:
-                st.success("🎉 **正解！**")
-            else:
-                st.error(f"❌ **不正解...** （あなたの回答: {st.session_state.user_choice}）")
-                st.info(f"**正解:** {correct_ans}")
-
-            if pd.notna(explanation) and str(explanation).strip() != "" and str(explanation) != "nan":
-                with st.expander("💡 **解説を見る**", expanded=True):
-                    st.write(explanation)
-
-            if st.button("次の問題へ ➔", use_container_width=True):
-                st.session_state.quiz_idx = (st.session_state.quiz_idx + 1) % len(df_all)
-                st.session_state.answered = False
-                st.session_state.user_choice = None
-                st.session_state.is_correct = False
-                st.rerun()
 # --- 2. 練習モード ---
 elif selected == "📖 練習モード":
     st.subheader("📖 練習モード")
