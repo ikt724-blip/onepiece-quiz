@@ -256,8 +256,13 @@ with st.sidebar:
 # 全データ取得
 df_all = load_all_data()
 
-# --- 1. ホーム画面 ---
+# --- 1. ホーム画面 (安全版) ---
 if selected == "ホーム":
+    st.title("🏴‍☠️ ONE PIECE ナレッジキング対策")
+    st.caption("― 最強のデータベースを脳に刻め ―")
+    st.divider()
+
+    # 画像ファイルの読み込み
     all_imgs = (
         glob.glob("images/*.png")
         + glob.glob("images/*.jpg")
@@ -266,7 +271,7 @@ if selected == "ホーム":
         + glob.glob("*.jpg")
     )
 
-    # アプリ起動・更新ごとに全キャラクターの画像順をランダム化してセッションに保持
+    # ランダム表示用のセッション管理
     if "shuffled_bg_images" not in st.session_state:
         shuffled = all_imgs.copy()
         random.shuffle(shuffled)
@@ -274,133 +279,38 @@ if selected == "ホーム":
 
     current_bg_imgs = st.session_state.get("shuffled_bg_images", [])
 
-    grid_imgs_html = ""
+    # 画像が存在する場合、Streamlit標準のカラム機能でタイル表示
     if current_bg_imgs:
-        # 上から下へ途切れなく流すため2周分配置
-        full_loop_imgs = current_bg_imgs + current_bg_imgs
-        for img_path in full_loop_imgs:
-            try:
-                if not os.path.exists(img_path):
-                    continue
-                with Image.open(img_path) as img:
-                    # 軽量化のためサムネイルサイズにリサイズ
-                    img.thumbnail((120, 120))
-                    buffered = io.BytesIO()
-                    ext = img_path.split(".")[-1].lower()
-                    fmt = "JPEG" if ext in ["jpg", "jpeg"] else "PNG"
-                    mime = "image/jpeg" if ext in ["jpg", "jpeg"] else "image/png"
-                    img.save(buffered, format=fmt, quality=70)
-                    b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
-                    grid_imgs_html += f'<img src="data:{mime};base64,{b64}" class="bg-tile" />'
-            except Exception:
-                continue
+        st.subheader("🖼️ キャラクターギャラリー")
+        # 最大20枚までに制限してメモリ・描画負荷を軽減
+        display_imgs = current_bg_imgs[:20] 
+        
+        # 5列のグリッド配置
+        cols = st.columns(5)
+        for idx, img_path in enumerate(display_imgs):
+            if os.path.exists(img_path):
+                with cols[idx % 5]:
+                    try:
+                        st.image(img_path, use_container_width=True)
+                    except Exception:
+                        pass
+        st.divider()
 
-    banner_html = f"""
-    <style>
-    .wt100-container {{
-        position: relative;
-        width: 100%;
-        height: 420px;
-        border-radius: 16px;
-        overflow: hidden;
-        border: 2px solid #333;
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
-        background-color: #0d0d0d;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }}
-    
-    .mosaic-bg {{
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
-        grid-auto-rows: 80px;
-        gap: 6px;
-        padding: 6px;
-        opacity: 0.85;
-        animation: stream-down 25s linear infinite;
-    }}
-
-    @keyframes stream-down {{
-        0% {{
-            transform: translateY(-50%);
-        }}
-        100% {{
-            transform: translateY(0%);
-        }}
-    }}
-    
-    .bg-tile {{
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-        border-radius: 6px;
-    }}
-
-    .center-overlay {{
-        position: relative;
-        z-index: 2;
-        background: rgba(0, 0, 0, 0.75);
-        backdrop-filter: blur(4px);
-        padding: 35px 50px;
-        border-radius: 16px;
-        border: 3px solid #ffcc00;
-        text-align: center;
-        box-shadow: 0 0 25px rgba(255, 204, 0, 0.5), inset 0 0 15px rgba(0, 0, 0, 0.5);
-        max-width: 85%;
-    }}
-    
-    .center-overlay h1 {{
-        margin: 0 0 10px 0;
-        font-size: 2.2rem;
-        color: #ffffff;
-        font-weight: 900;
-        text-shadow: 2px 2px 4px #000000;
-        letter-spacing: 2px;
-    }}
-    
-    .center-overlay p {{
-        margin: 0;
-        color: #ffcc00;
-        font-size: 1.1rem;
-        font-weight: 700;
-        text-shadow: 1px 1px 2px #000000;
-        letter-spacing: 2px;
-    }}
-    </style>
-
-    <div class="wt100-container">
-        <div class="mosaic-bg">
-            {grid_imgs_html if grid_imgs_html else '<div style="grid-column: 1/-1; text-align:center; color:#888; padding-top:180px;">（画像を追加すると背景に全キャラが流れます）</div>'}
-        </div>
-        <div class="center-overlay">
-            <h1>🏴‍☠️ ONE PIECE ナレッジキング対策</h1>
-            <p>― 最強のデータベースを脳に刻め ―</p>
-        </div>
-    </div>
-    """
-
-    st.markdown(banner_html, unsafe_allow_html=True)
-    st.write("")
-
-    if st.button("🔀 背景画像のランダム並び順をシャッフル"):
+    # ボタン処理
+    if st.button("🔀 画像の並び順をシャッフル"):
         shuffled = all_imgs.copy()
         random.shuffle(shuffled)
         st.session_state["shuffled_bg_images"] = shuffled
         st.rerun()
 
-    if df_all.empty:
-        st.warning(
-            "現在、読み込めるExcelデータ（.xlsx）がありません。GitHubにExcelファイルをアップロードしてください。"
-        )
+    # データフレームの確認
+    if "df_all" in locals() or "df_all" in globals():
+        if df_all.empty:
+            st.warning("現在、読み込めるExcelデータ（.xlsx）がありません。GitHubにExcelファイルをアップロードしてください。")
+        else:
+            st.info(f"👈 左側のメニューから機能を選択してください。（登録済データ: {len(df_all)} 件）")
     else:
-        st.info(
-            f"👈 左側のメニューから機能を選択してください。（登録済データ: {len(df_all)} 件）"
-        )
+        st.info("👈 左側のメニューから機能を選択してください。")
 
 # --- 2. 練習モード ---
 elif selected == "📖 練習モード":
