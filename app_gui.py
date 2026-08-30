@@ -1073,7 +1073,7 @@ elif selected == "➕ データ追加・編集":
                         st.success("自由記述問題を追加しました！")
 
    # ----------------------------------------------------
-    # 【2. データの編集・修正（ストーリー絞り込み ＆ 動作安定版）】
+    # 【2. データの編集・修正（エラー完全解消・動作安定版）】
     # ----------------------------------------------------
     elif tab_selection == "✏️ 2. データの編集・修正":
         st.subheader("🛠️ かんたん問題修正フォーム")
@@ -1092,26 +1092,27 @@ elif selected == "➕ データ追加・編集":
             st.markdown("##### 🔍 表示する問題を絞り込む")
             f_col1, f_col2, f_col3 = st.columns([2, 2, 3])
 
-            # ストーリー（編）一覧の抽出
+            # ストーリー（編）列の自動検出
             story_col_name = None
-            for c in ["story", "編", "章", "category", "カテゴリ"]:
+            possible_story_cols = ["story", "編", "章", "chapter", "category", "カテゴリ", "arc", "エピソード"]
+            for c in possible_story_cols:
                 if c in current_df.columns:
                     story_col_name = c
                     break
 
             story_options = ["すべて"]
             if story_col_name:
-                valid_stories = current_df[story_col_name].dropna().astype(str).unique().tolist()
-                story_options.extend([s for s in valid_stories if s and s != "nan"])
+                valid_stories = sorted([str(s).strip() for s in current_df[story_col_name].dropna().unique() if str(s).strip() and str(s).lower() != "nan"])
+                story_options.extend(valid_stories)
 
             with f_col1:
                 selected_story = st.selectbox("ストーリー（編）", options=story_options, key="filter_story")
 
-            # 出題タイプ一覧の抽出
+            # 出題タイプ列の取得
             type_options = ["すべて"]
             if "type" in current_df.columns:
-                valid_types = current_df["type"].dropna().astype(str).unique().tolist()
-                type_options.extend([t for t in valid_types if t and t != "nan"])
+                valid_types = sorted([str(t).strip() for t in current_df["type"].dropna().unique() if str(t).strip() and str(t).lower() != "nan"])
+                type_options.extend(valid_types)
 
             with f_col2:
                 selected_type = st.selectbox("出題形式", options=type_options, key="filter_type")
@@ -1119,78 +1120,74 @@ elif selected == "➕ データ追加・編集":
             with f_col3:
                 keyword = st.text_input("キーワード検索（問題文・解説等）", placeholder="例：ルフィ、アラバスタ")
 
-            # フィルタリング適用
+            # フィルタリング処理
             filtered_df = current_df.copy()
             if selected_story != "すべて" and story_col_name:
-                filtered_df = filtered_df[filtered_df[story_col_name].astype(str) == selected_story]
+                filtered_df = filtered_df[filtered_df[story_col_name].astype(str).str.strip() == selected_story]
             if selected_type != "すべて" and "type" in filtered_df.columns:
-                filtered_df = filtered_df[filtered_df["type"].astype(str) == selected_type]
+                filtered_df = filtered_df[filtered_df["type"].astype(str).str.strip() == selected_type]
             if keyword:
                 mask = filtered_df.astype(str).apply(lambda x: x.str.contains(keyword, case=False, na=False)).any(axis=1)
                 filtered_df = filtered_df[mask]
 
             filtered_df = filtered_df.reset_index(drop=False) # 元のインデックス（'index'列）を保持
-
             filtered_count = len(filtered_df)
 
             if filtered_count == 0:
-                st.warning("条件に一致する問題が見つかりませんでした。フィルターを変更してください。")
+                st.warning("条件に一致する問題が見つかりませんでした。フィルター条件を変更してください。")
             else:
-                # セッション位置の保持
+                # インデックスの安全な初期化
                 if "edit_sub_idx" not in st.session_state:
                     st.session_state["edit_sub_idx"] = 0
 
-                # 範囲外ガード
+                # 範囲外チェック
                 if st.session_state["edit_sub_idx"] >= filtered_count:
                     st.session_state["edit_sub_idx"] = 0
 
                 st.write("---")
 
-                # --- ◀ 前へ / プルダウン / 次へ ▶ ナビゲーション ---
+                # ナビゲーションボタン（前へ）
                 nav_col1, nav_col2, nav_col3 = st.columns([1, 4, 1])
 
                 with nav_col1:
-                    st.write("") # 高さ調整
+                    st.write("") # 高さ微調整
                     if st.button("◀ 前へ", use_container_width=True, disabled=(st.session_state["edit_sub_idx"] <= 0)):
                         st.session_state["edit_sub_idx"] -= 1
-                        st.session_state["edit_select_key"] = st.session_state["edit_sub_idx"]
                         st.rerun()
 
-                # 選択肢ラベルの構築
-                options_list = []
+                # プルダウンの選択肢構築
+                options_dict = {}
                 for sub_i, r in filtered_df.iterrows():
                     orig_i = r["index"]
                     q_type = get_clean_str(r.get("type")) or "未設定"
                     q_txt = get_clean_str(r.get("question") or r.get("name") or r.get("名前")) or "無題"
                     label = f"[{sub_i + 1}/{filtered_count}] (全{orig_i + 1}件目) 【{q_type}】 {q_txt[:25]}"
-                    options_list.append((sub_i, label))
+                    options_dict[sub_i] = label
 
                 with nav_col2:
-                    # 初期キーの設定
-                    if "edit_select_key" not in st.session_state:
-                        st.session_state["edit_select_key"] = st.session_state["edit_sub_idx"]
-
-                    def on_selectbox_change():
-                        st.session_state["edit_sub_idx"] = st.session_state["edit_select_key"]
-
-                    st.selectbox(
+                    current_idx_val = st.session_state["edit_sub_idx"]
+                    selected_sub_idx = st.selectbox(
                         "問題を選択",
-                        options=[opt[0] for opt in options_list],
-                        format_func=lambda x: options_list[x][1],
-                        key="edit_select_key",
-                        on_change=on_selectbox_change
+                        options=list(options_dict.keys()),
+                        format_func=lambda x: options_dict[x],
+                        index=current_idx_val,
+                        key=f"select_box_sub_{current_idx_val}"
                     )
-
-                with nav_col3:
-                    st.write("") # 高さ調整
-                    if st.button("次へ ▶", use_container_width=True, disabled=(st.session_state["edit_sub_idx"] >= filtered_count - 1)):
-                        st.session_state["edit_sub_idx"] += 1
-                        st.session_state["edit_select_key"] = st.session_state["edit_sub_idx"]
+                    
+                    if selected_sub_idx != st.session_state["edit_sub_idx"]:
+                        st.session_state["edit_sub_idx"] = selected_sub_idx
                         st.rerun()
 
+                with nav_col3:
+                    st.write("") # 高さ微調整
+                    if st.button("次へ ▶", use_container_width=True, disabled=(st.session_state["edit_sub_idx"] >= filtered_count - 1)):
+                        st.session_state["edit_sub_idx"] += 1
+                        st.rerun()
+
+                # 選択対象データの特定
                 current_sub_idx = st.session_state["edit_sub_idx"]
                 target_sub_row = filtered_df.iloc[current_sub_idx]
-                selected_idx = target_sub_row["index"] # 元の全体データフレームでの行番号
+                selected_idx = target_sub_row["index"]
                 target_row = current_df.iloc[selected_idx]
 
                 st.markdown(f"##### ✏️ 絞り込み問題 `{current_sub_idx + 1} / {filtered_count}` （全体データID: `{selected_idx + 1}`）の修正")
@@ -1206,7 +1203,7 @@ elif selected == "➕ データ追加・編集":
                     st.write(f"**問題:** {q_val or '（なし）'}")
                     st.write(f"**正解:** {a_val or '（なし）'}")
 
-                # 修正入力フォーム
+                # 修正フォーム
                 with st.form(f"quick_edit_form_{selected_idx}"):
                     col_e1, col_e2 = st.columns(2)
                     with col_e1:
@@ -1265,5 +1262,4 @@ elif selected == "➕ データ追加・編集":
                     st.session_state["working_df"] = pd.DataFrame()
                     st.session_state["added_data"] = pd.DataFrame()
                     st.session_state["edit_sub_idx"] = 0
-                    st.session_state["edit_select_key"] = 0
                     st.rerun()
