@@ -249,10 +249,6 @@ df_all = load_all_data()
 
 # --- 1. ホーム画面 ---
 if selected == "ホーム":
-    st.title("🏴‍☠️ ONE PIECE ナレッジキング対策")
-    st.caption("― 最強のデータベースを脳に刻め ―")
-    st.divider()
-
     all_imgs = (
         glob.glob("images/*.png")
         + glob.glob("images/*.jpg")
@@ -262,56 +258,109 @@ if selected == "ホーム":
     )
 
     if all_imgs:
-        st.subheader("🖼️ キャラクターギャラリー")
+        # WT100風に敷き詰めるため枚数を35枚程度に拡張
+        sample_imgs = random.sample(all_imgs, min(len(all_imgs), 35))
         
-        # 上から下へ流れ落ちるアニメーションCSSの定義
-        st.markdown(
-            """
-            <style>
-            @keyframes dropDown {
-                0% {
-                    opacity: 0;
-                    transform: translateY(-50px);
-                }
-                100% {
-                    opacity: 1;
-                    transform: translateY(0);
-                }
-            }
-            .animated-img {
-                width: 130px;
-                height: auto;
-                border-radius: 8px;
-                box-shadow: 0 4px 8px rgba(0,0,0,0.15);
-                animation: dropDown 0.6s ease-out forwards;
-                opacity: 0;
-            }
-            </style>
-            """,
-            unsafe_allow_html=True
-        )
-
-        # 15枚全データからランダム抽出
-        sample_imgs = random.sample(all_imgs, min(len(all_imgs), 15))
+        # Base64化した画像タグを生成
+        html_images = ""
+        sizes = ["", "size-2x2", "", "size-1x2", "", "size-2x1", ""]  # モザイク感のアクセント
         
-        # 5列に配置
-        cols = st.columns(5)
         for idx, img_path in enumerate(sample_imgs):
             if os.path.exists(img_path):
-                col = cols[idx % 5]
                 b64_str = image_to_base64(img_path)
                 if b64_str:
-                    # 次々に時間差（0.1秒刻み）で落下表示
-                    delay = round(idx * 0.1, 2)
-                    img_html = f"""
-                    <div style="text-align: center; margin-bottom: 15px;">
-                        <img src="{b64_str}" class="animated-img" style="animation-delay: {delay}s;" />
-                    </div>
-                    """
-                    with col:
-                        st.markdown(img_html, unsafe_allow_html=True)
+                    size_cls = sizes[idx % len(sizes)]
+                    html_images += f'<img src="{b64_str}" class="wt-item {size_cls}" />'
 
-        st.write("")
+        # WT100風レイアウトのCSS & HTML
+        wt100_html = f"""
+        <style>
+        .wt-hero-container {{
+            position: relative;
+            width: 100%;
+            min-height: 520px;
+            background-color: #000;
+            overflow: hidden;
+            border-radius: 12px;
+            margin-bottom: 20px;
+        }}
+        .wt-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(85px, 1fr));
+            grid-auto-rows: 85px;
+            grid-auto-flow: dense;
+            gap: 0 !important;
+            width: 100%;
+        }}
+        .wt-item {{
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+            border: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            filter: brightness(0.8);
+            transition: transform 0.2s, filter 0.2s;
+        }}
+        .wt-item:hover {{
+            filter: brightness(1.25);
+            transform: scale(1.05);
+            z-index: 5;
+        }}
+        .wt-item.size-2x2 {{ grid-column: span 2; grid-row: span 2; }}
+        .wt-item.size-2x1 {{ grid-column: span 2; grid-row: span 1; }}
+        .wt-item.size-1x2 {{ grid-column: span 1; grid-row: span 2; }}
+
+        .wt-overlay {{
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+            pointer-events: none;
+            background: radial-gradient(circle, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.75) 100%);
+        }}
+        .wt-title {{
+            text-align: center;
+            color: #fff;
+            text-shadow: 0 4px 15px rgba(0,0,0,0.9), 0 0 25px rgba(255, 0, 0, 0.8);
+        }}
+        .wt-title h1 {{
+            font-size: 2.3rem;
+            font-weight: 900;
+            margin: 0;
+            letter-spacing: 2px;
+            color: #ffffff;
+        }}
+        .wt-title p {{
+            font-size: 1rem;
+            color: #ff3b30;
+            font-weight: bold;
+            margin-top: 6px;
+        }}
+        </style>
+
+        <div class="wt-hero-container">
+            <div class="wt-grid">
+                {html_images}
+            </div>
+            <div class="wt-overlay">
+                <div class="wt-title">
+                    <h1>🏴‍☠️ ONE PIECE ナレッジキング対策</h1>
+                    <p>― 最強のデータベースを脳に刻め ―</p>
+                </div>
+            </div>
+        </div>
+        """
+        
+        st.markdown(wt100_html, unsafe_allow_html=True)
+
         if st.button("🔀 画像をシャッフル（再アニメーション）"):
             st.rerun()
         st.divider()
@@ -323,7 +372,6 @@ if selected == "ホーム":
     else:
         st.success(f"✅ データベース接続完了: 合計 {len(df_all)} 件の問題データが登録されています。")
         st.info("👈 左側のメニューから機能を選択してください。")
-
 # --- 2. 練習モード ---
 elif selected == "📖 練習モード":
     st.subheader("📖 練習モード")
