@@ -1203,11 +1203,21 @@ elif selected == "➕ データ追加・編集":
                     st.write(f"**問題:** {q_val or '（なし）'}")
                     st.write(f"**正解:** {a_val or '（なし）'}")
 
-                # 修正フォーム
+               # 修正フォーム
                 with st.form(f"quick_edit_form_{selected_idx}"):
                     col_e1, col_e2 = st.columns(2)
                     with col_e1:
-                        e_type = st.text_input("出題種別 / タイプ", value=get_clean_str(target_row.get("type")))
+                        # --- 出題種別をプルダウンに変更 ---
+                        type_list = ["キャラデータ", "一問一答", "一問多答", "順序選択", "6文字並べ替え", "組み合わせ", "自由記述"]
+                        curr_type = get_clean_str(target_row.get("type"))
+                        
+                        # 既存の値が選択肢にない場合は自動でリストに追加
+                        if curr_type and curr_type not in type_list:
+                            type_list.append(curr_type)
+                        
+                        type_idx = type_list.index(curr_type) if curr_type in type_list else 0
+                        e_type = st.selectbox("出題種別 / タイプ", options=type_list, index=type_idx)
+
                         e_question = st.text_area("問題文 / 名前", value=get_clean_str(target_row.get("question") or target_row.get("name")), height=100)
                         e_q_img = st.text_input("問題画像（question_image）", value=get_clean_str(target_row.get("question_image") or target_row.get("image")))
                         e_a_img = st.text_input("正答・解説画像（answer_image）", value=get_clean_str(target_row.get("answer_image")))
