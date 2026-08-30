@@ -47,21 +47,20 @@ def get_clean_str(val):
     return s
 
 
-# --- 🖼️ 画像表示・ランダム画像表示関数（改善版） ---
+# --- 🖼️ 画像表示・フォルダ自動探索関数（改善版） ---
 def display_question_image(row, width=200, show_caption=True):
     """
-    指定された行データから画像（単一・複数・ランダム）を判定し、
-    上から下へ（縦一列に）常時綺麗に表示する関数
+    指定された行データから画像パスを抽出し、
+    ローカルフォルダ（images/等）を含めて自動探索した上で縦一列に安全表示する関数
     """
-    # 1. 表示対象となる画像パス/URLの抽出
     img_sources = []
+    IMAGE_DIRS = ["images", "img", "static/images", "assets", "data/images", "."]
     
-    # 問題画像、正答画像、通常画像の候補をチェック
+    # 1. 問題画像、正答画像、通常画像の候補をチェック
     for col in ["question_image", "image", "answer_image", "画像"]:
         if col in row and pd.notna(row[col]):
             val = str(row[col]).strip()
             if val and val.lower() != "nan":
-                # カンマや改行で複数画像が指定されている場合にも対応
                 for img_item in val.replace("\n", ",").split(","):
                     cleaned_path = img_item.strip()
                     if cleaned_path and cleaned_path not in img_sources:
@@ -72,25 +71,40 @@ def display_question_image(row, width=200, show_caption=True):
         st.info("📷 画像データなし")
         return
 
-    # 3. 抽出された画像を上から下へ（縦一列）常時表示
-    for idx, img_path in enumerate(img_sources):
-        try:
-            # キャプション表示の設定
-            cap = None
-            if show_caption:
-                q_text = str(row.get("question") or row.get("name") or "").strip()
-                cap = f"画像 {idx + 1}" if not q_text else f"【画像 {idx + 1}】 {q_text[:20]}"
+    # 3. 画像の存在チェック & フォルダ補正をして表示
+    for idx, raw_path in enumerate(img_sources):
+        resolved_path = None
 
-            # 画像の表示（横幅指定 & 自動フィット）
-            st.image(
-                img_path,
-                caption=cap,
-                width=width,
-                use_column_width=(width is None)
-            )
-        except Exception:
-            # パス切れ等のエラー時も止まらずメッセージ表示
-            st.warning(f"⚠️ 画像の読み込みに失敗しました ({img_path})")
+        if raw_path.startswith("http://") or raw_path.startswith("https://"):
+            resolved_path = raw_path
+        else:
+            if os.path.exists(raw_path):
+                resolved_path = raw_path
+            else:
+                filename = os.path.basename(raw_path)
+                for d in IMAGE_DIRS:
+                    test_path = os.path.join(d, filename)
+                    if os.path.exists(test_path):
+                        resolved_path = test_path
+                        break
+
+        cap = None
+        if show_caption:
+            q_text = str(row.get("question") or row.get("name") or "").strip()
+            cap = f"画像 {idx + 1}" if not q_text else f"【画像 {idx + 1}】 {q_text[:20]}"
+
+        if resolved_path:
+            try:
+                st.image(
+                    resolved_path,
+                    caption=cap,
+                    width=width,
+                    use_column_width=(width is None)
+                )
+            except Exception:
+                st.warning(f"⚠️ 画像の表示エラー: {raw_path}")
+        else:
+            st.info(f"📷 画像ファイルが見つかりません: `{raw_path}`")
 
 
 # 正解リスト抽出ヘルパー
@@ -200,7 +214,6 @@ with st.sidebar:
         else 0
     )
 
-    # keyにcurrent_navを直接指定・動的同期
     selected = option_menu(
         menu_title=None,
         options=menu_options,
@@ -213,7 +226,7 @@ with st.sidebar:
             "plus-circle",
         ],
         default_index=def_idx,
-        key=f"nav_menu_{st.session_state['current_nav']}",
+        key="nav_menu_main",
     )
     st.session_state["current_nav"] = selected
 
@@ -270,7 +283,7 @@ if selected == "ホーム":
         grid-auto-rows: 85px;
         gap: 3px;
         opacity: 0.85;
-        animation: scroll-down 25s linear infinite;
+        animation: scroll-down 10s linear infinite; /* ⚡ 速度を25sから10sへ高速化 */
     }}
 
     @keyframes scroll-down {{
@@ -431,7 +444,6 @@ elif selected == "📖 練習モード":
                     st.markdown(f"### 第 {curr_idx + 1} 問 / 全 {total_q} 問")
                 with c_top2:
                     if st.button("🛠️ この問題を修正する"):
-                        # 画像名やキャラ名を取得して確実に目的の行へピンポイントジャンプ
                         img_name = get_clean_str(q.get("image") or q.get("画像"))
                         char_name = get_clean_str(q.get("name") or q.get("名前"))
                         
@@ -441,8 +453,6 @@ elif selected == "📖 練習モード":
 
                         st.session_state["edit_search_keyword"] = target_kw
                         st.session_state["edit_active_tab"] = 1
-                        st.session_state["selected_char_index"] = 0
-                        st.session_state["selected_quiz_index"] = 0
                         st.session_state["current_nav"] = "➕ データ追加・編集"
                         st.rerun()
 
@@ -451,7 +461,6 @@ elif selected == "📖 練習モード":
 
                 is_char_q = "このキャラクターの名前は？" in question_text or bool(q.get("image") or q.get("画像"))
                 if is_char_q:
-                    # 出題画面のため show_caption=False でファイル名を完全非表示
                     display_question_image(q, show_caption=False)
 
                 is_sort = (
@@ -638,7 +647,6 @@ elif selected == "🏆 本番模試（50問/60分）":
 
                 is_char_q = "このキャラクターの名前は？" in question_text or bool(q.get("image") or q.get("画像"))
                 if is_char_q:
-                    # 出題画面のため show_caption=False でファイル名を完全非表示
                     display_question_image(q, show_caption=False)
 
                 is_sort = (
@@ -713,7 +721,6 @@ elif selected == "🔍 AI検索モード":
     if df_all.empty:
         st.error("データが見つかりません。Excelファイルを配置してください。")
     else:
-        # 検索・フィルターエリア
         col_s1, col_s2, col_s3 = st.columns([2, 1, 1])
         with col_s1:
             search_query = st.text_input(
@@ -727,7 +734,6 @@ elif selected == "🔍 AI検索モード":
         with col_s3:
             filter_fruit = st.selectbox("悪魔の実", ["すべて", "能力者のみ", "非能力者"])
 
-        # フィルタリング処理
         filtered_df = df_all.copy()
 
         if search_query:
@@ -794,7 +800,6 @@ elif selected == "🔍 AI検索モード":
                 if exp:
                     st.write(f"**解説:** {exp}")
 
-                # 編集画面への直接ジャンプボタン
                 if st.button("🛠️ このデータを編集・修正する", use_container_width=True):
                     target_kw = name_val or get_clean_str(selected_item.get("image") or selected_item.get("画像")) or q_text
                     st.session_state["edit_search_keyword"] = target_kw
@@ -855,7 +860,6 @@ elif selected == "➕ データ追加・編集":
             "✏️ 自由記述"
         ])
 
-        # --- 👤 キャラデータ ---
         with add_tab_char:
             st.markdown("##### キャラクターマスターの追加")
             with st.form("char_form", clear_on_submit=True):
@@ -884,7 +888,6 @@ elif selected == "➕ データ追加・編集":
                     else:
                         st.error("キャラクター名は必須項目です。")
 
-        # --- 🎯 一問一答 ---
         with add_tab_1to1:
             st.markdown("##### 一問一答クイズの追加")
             with st.form("form_1to1", clear_on_submit=True):
@@ -921,7 +924,6 @@ elif selected == "➕ データ追加・編集":
                     else:
                         st.error("入力漏れがあります。")
 
-        # --- ☑️ 一問多答 ---
         with add_tab_multi:
             st.markdown("##### 一問多答クイズの追加")
             with st.form("form_multi", clear_on_submit=True):
@@ -964,7 +966,6 @@ elif selected == "➕ データ追加・編集":
                         st.session_state["added_data"] = pd.concat([st.session_state["added_data"], pd.DataFrame([new_item])], ignore_index=True)
                         st.success("一問多答問題を追加しました！")
 
-        # --- 🔢 順序選択 ---
         with add_tab_order:
             st.markdown("##### 順序選択クイズの追加")
             with st.form("form_order", clear_on_submit=True):
@@ -997,7 +998,6 @@ elif selected == "➕ データ追加・編集":
                         st.session_state["added_data"] = pd.concat([st.session_state["added_data"], pd.DataFrame([new_item])], ignore_index=True)
                         st.success("順序選択問題を追加しました！")
 
-        # --- 🔤 6文字並べ替え ---
         with add_tab_6char:
             st.markdown("##### 6文字並べ替えクイズの追加")
             with st.form("form_6char", clear_on_submit=True):
@@ -1027,7 +1027,6 @@ elif selected == "➕ データ追加・編集":
                         st.session_state["added_data"] = pd.concat([st.session_state["added_data"], pd.DataFrame([new_item])], ignore_index=True)
                         st.success("6文字並べ替え問題を追加しました！")
 
-        # --- 🔗 組み合わせ ---
         with add_tab_pair:
             st.markdown("##### 組み合わせクイズの追加")
             with st.form("form_pair", clear_on_submit=True):
@@ -1061,7 +1060,6 @@ elif selected == "➕ データ追加・編集":
                         st.session_state["added_data"] = pd.concat([st.session_state["added_data"], pd.DataFrame([new_item])], ignore_index=True)
                         st.success("組み合わせ問題を追加しました！")
 
-        # --- ✏️ 自由記述 ---
         with add_tab_free:
             st.markdown("##### 自由記述クイズの追加")
             with st.form("form_free", clear_on_submit=True):
@@ -1087,13 +1085,12 @@ elif selected == "➕ データ追加・編集":
                         st.session_state["added_data"] = pd.concat([st.session_state["added_data"], pd.DataFrame([new_item])], ignore_index=True)
                         st.success("自由記述問題を追加しました！")
 
-   # ----------------------------------------------------
-    # 【2. データの編集・修正（ストーリー絞り込み完全修正版）】
+    # ----------------------------------------------------
+    # 【2. データの編集・修正】
     # ----------------------------------------------------
     elif tab_selection == "✏️ 2. データの編集・修正":
         st.subheader("🛠️ かんたん問題修正フォーム")
 
-        # --- データの初期化 ---
         if "working_df" not in st.session_state or st.session_state["working_df"].empty:
             with st.spinner("データを読み込み中..."):
                 if "added_data" in st.session_state and not st.session_state["added_data"].empty:
@@ -1107,22 +1104,18 @@ elif selected == "➕ データ追加・編集":
         if current_df.empty:
             st.info("編集対象のデータがありません。")
         else:
-            # --- 🔍 絞り込みフィルター（ストーリー・出題タイプ） ---
             st.markdown("##### 🔍 表示する問題を絞り込む")
             f_col1, f_col2, f_col3 = st.columns([2, 2, 3])
 
-            # 1. ストーリー（編）列の自動判定（全列名を検査）
             story_col_name = None
             target_keywords = ["story", "編", "章", "chapter", "category", "カテゴリ", "arc", "エピソード", "シリーズ", "話"]
             
-            # 完全一致・部分一致で列名を検索
             for col in current_df.columns:
                 col_lower = str(col).lower().strip()
                 if any(kw in col_lower for kw in target_keywords):
                     story_col_name = col
                     break
 
-            # 2. ストーリー選択肢の動的生成
             story_options = ["すべて"]
             if story_col_name:
                 unique_stories = current_df[story_col_name].dropna().unique()
@@ -1139,7 +1132,6 @@ elif selected == "➕ データ追加・編集":
                 else:
                     st.caption("⚠️ 該当するストーリー列が見つかりません")
 
-            # 3. 出題タイプ選択肢の動的生成
             type_options = ["すべて"]
             if "type" in current_df.columns:
                 unique_types = current_df["type"].dropna().unique()
@@ -1152,10 +1144,10 @@ elif selected == "➕ データ追加・編集":
             with f_col2:
                 selected_type = st.selectbox("出題形式", options=type_options, key="filter_type")
 
+            init_kw = st.session_state.pop("edit_search_keyword", "")
             with f_col3:
-                keyword = st.text_input("キーワード検索（問題文・解説等）", placeholder="例：ルフィ、アラバスタ")
+                keyword = st.text_input("キーワード検索（問題文・解説等）", value=init_kw, placeholder="例：ルフィ、アラバスタ")
 
-            # --- ⚡ フィルタリング実行 ---
             filtered_df = current_df.copy()
             
             if selected_story != "すべて" and story_col_name:
@@ -1168,13 +1160,12 @@ elif selected == "➕ データ追加・編集":
                 mask = filtered_df.astype(str).apply(lambda x: x.str.contains(keyword, case=False, na=False)).any(axis=1)
                 filtered_df = filtered_df[mask]
 
-            filtered_df = filtered_df.reset_index(drop=False) # 元のインデックス（'index'列）を保持
+            filtered_df = filtered_df.reset_index(drop=False)
             filtered_count = len(filtered_df)
 
             if filtered_count == 0:
                 st.warning("条件に一致する問題が見つかりませんでした。フィルター条件を変更してください。")
             else:
-                # セッション内のインデックス安全管理
                 if "edit_sub_idx" not in st.session_state:
                     st.session_state["edit_sub_idx"] = 0
                 if st.session_state["edit_sub_idx"] >= filtered_count:
@@ -1182,7 +1173,6 @@ elif selected == "➕ データ追加・編集":
 
                 st.write("---")
 
-                # --- ◀ 前へ / プルダウン / 次へ ▶ ナビゲーション ---
                 nav_col1, nav_col2, nav_col3 = st.columns([1, 4, 1])
 
                 with nav_col1:
@@ -1191,7 +1181,6 @@ elif selected == "➕ データ追加・編集":
                         st.session_state["edit_sub_idx"] -= 1
                         st.rerun()
 
-                # プルダウン選択肢ラベル生成
                 options_dict = {}
                 for sub_i, r in filtered_df.iterrows():
                     orig_i = r["index"]
@@ -1219,7 +1208,6 @@ elif selected == "➕ データ追加・編集":
                         st.session_state["edit_sub_idx"] += 1
                         st.rerun()
 
-                # 選択対象データの抽出
                 current_sub_idx = st.session_state["edit_sub_idx"]
                 target_sub_row = filtered_df.iloc[current_sub_idx]
                 selected_idx = target_sub_row["index"]
@@ -1227,7 +1215,6 @@ elif selected == "➕ データ追加・編集":
 
                 st.markdown(f"##### ✏️ 絞り込み問題 `{current_sub_idx + 1} / {filtered_count}` （全体データID: `{selected_idx + 1}`）の修正")
 
-                # プレビュー表示
                 prev_col1, prev_col2 = st.columns(2)
                 with prev_col1:
                     st.caption("🖼️ 現在の問題画像")
@@ -1238,7 +1225,6 @@ elif selected == "➕ データ追加・編集":
                     st.write(f"**問題:** {q_val or '（なし）'}")
                     st.write(f"**正解:** {a_val or '（なし）'}")
 
-                # --- 📝 修正フォーム ---
                 with st.form(f"quick_edit_form_{selected_idx}"):
                     col_e1, col_e2 = st.columns(2)
                     with col_e1:
