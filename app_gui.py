@@ -258,10 +258,8 @@ if selected == "ホーム":
     )
 
     if all_imgs:
-        # 無限スクロールのループ用に画像を多め（50枚程度）に用意
         sample_imgs = random.sample(all_imgs, min(len(all_imgs), 50))
         
-        # 6つの縦列（カラム）に画像を分割して分配
         NUM_COLS = 6
         columns_b64 = [[] for _ in range(NUM_COLS)]
         
@@ -273,30 +271,36 @@ if selected == "ホーム":
                     columns_b64[img_idx % NUM_COLS].append(b64_str)
                     img_idx += 1
 
-        # 各列の画像を生成（無限ループ用に同じ画像配列を2回繰り返すのがポイント）
-        cols_html = ""
+        # 列ごとのHTML文字列を生成
+        cols_html_list = []
         for i, col_imgs in enumerate(columns_b64):
             if not col_imgs:
                 continue
-            # シームレス接続のためにループさせる
             duplicated_imgs = col_imgs + col_imgs
             imgs_tags = "".join([f'<img src="{b64}" class="scroll-img" />' for b64 in duplicated_imgs])
             
-            # 列ごとに方向や速度に変化をつけるクラス（例: odd / even）
             col_class = "col-down" if i % 2 == 0 else "col-up"
-            speed_class = f"speed-{ (i % 3) + 1 }"
+            speed_class = f"speed-{(i % 3) + 1}"
             
-            cols_html += f"""
+            col_block = f'''
             <div class="scroll-column {col_class} {speed_class}">
                 <div class="scroll-track">
                     {imgs_tags}
                 </div>
             </div>
-            """
+            '''
+            cols_html_list.append(col_block)
 
-        wt100_html = f"""
+        cols_html = "".join(cols_html_list)
+
+        wt100_full_html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
         <style>
-        /* コンテナ定義 */
+        * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+        body {{ background-color: #0e1117; font-family: sans-serif; overflow: hidden; }}
+
         .wt-hero-container {{
             position: relative;
             width: 100%;
@@ -304,16 +308,14 @@ if selected == "ホーム":
             background-color: #000;
             overflow: hidden;
             border-radius: 12px;
-            margin-bottom: 20px;
         }}
 
-        /* 縦スライドを収めるフレックスボックス */
         .scroll-wrapper {{
             display: flex;
             width: 100%;
             height: 100%;
             gap: 2px;
-            opacity: 0.75; /* 背後の主張を少し抑えてタイトルを目立たせる */
+            opacity: 0.8;
         }}
 
         .scroll-column {{
@@ -337,7 +339,6 @@ if selected == "ホーム":
             display: block;
         }}
 
-        /* --- 無限アニメーションキーフレーム --- */
         @keyframes scrollDown {{
             0% {{ transform: translateY(-50%); }}
             100% {{ transform: translateY(0%); }}
@@ -348,19 +349,13 @@ if selected == "ホーム":
             100% {{ transform: translateY(-50%); }}
         }}
 
-        /* 移動方向と速度のバリエーション */
-        .col-down .scroll-track {{
-            animation: scrollDown 25s linear infinite;
-        }}
-        .col-up .scroll-track {{
-            animation: scrollUp 25s linear infinite;
-        }}
+        .col-down .scroll-track {{ animation: scrollDown linear infinite; }}
+        .col-up .scroll-track {{ animation: scrollUp linear infinite; }}
 
         .speed-1 .scroll-track {{ animation-duration: 20s; }}
         .speed-2 .scroll-track {{ animation-duration: 28s; }}
         .speed-3 .scroll-track {{ animation-duration: 35s; }}
 
-        /* 前面オーバーレイ */
         .wt-overlay {{
             position: absolute;
             top: 0;
@@ -383,7 +378,7 @@ if selected == "ホーム":
         }}
 
         .wt-title h1 {{
-            font-size: 2.3rem;
+            font-size: 2.2rem;
             font-weight: 900;
             margin: 0;
             letter-spacing: 2px;
@@ -397,21 +392,25 @@ if selected == "ホーム":
             margin-top: 6px;
         }}
         </style>
-
-        <div class="wt-hero-container">
-            <div class="scroll-wrapper">
-                {cols_html}
-            </div>
-            <div class="wt-overlay">
-                <div class="wt-title">
-                    <h1>🏴‍☠️ ONE PIECE ナレッジキング対策</h1>
-                    <p>― 最強のデータベースを脳に刻め ―</p>
+        </head>
+        <body>
+            <div class="wt-hero-container">
+                <div class="scroll-wrapper">
+                    {cols_html}
+                </div>
+                <div class="wt-overlay">
+                    <div class="wt-title">
+                        <h1>🏴‍☠️ ONE PIECE ナレッジキング対策</h1>
+                        <p>― 最強のデータベースを脳に刻め ―</p>
+                    </div>
                 </div>
             </div>
-        </div>
+        </body>
+        </html>
         """
         
-        st.markdown(wt100_html, unsafe_allow_html=True)
+        # iframe経由でHTMLを独立描画させることで描画崩れを完全防止
+        components.html(wt100_full_html, height=500)
 
         if st.button("🔀 画像をシャッフル（再アニメーション）"):
             st.rerun()
