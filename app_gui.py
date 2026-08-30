@@ -272,22 +272,24 @@ if selected == "ホーム":
         random.shuffle(shuffled)
         st.session_state["shuffled_bg_images"] = shuffled
 
-    current_bg_imgs = st.session_state["shuffled_bg_images"]
+    current_bg_imgs = st.session_state.get("shuffled_bg_images", [])
 
     grid_imgs_html = ""
     if current_bg_imgs:
-        # 画面更新時のランダム順を元に、途切れなく上から下へ流すため2周分配置
+        # 上から下へ途切れなく流すため2周分配置
         full_loop_imgs = current_bg_imgs + current_bg_imgs
         for img_path in full_loop_imgs:
             try:
+                if not os.path.exists(img_path):
+                    continue
                 with Image.open(img_path) as img:
+                    # 軽量化のためサムネイルサイズにリサイズ
+                    img.thumbnail((120, 120))
                     buffered = io.BytesIO()
                     ext = img_path.split(".")[-1].lower()
                     fmt = "JPEG" if ext in ["jpg", "jpeg"] else "PNG"
-                    mime = (
-                        "image/jpeg" if ext in ["jpg", "jpeg"] else "image/png"
-                    )
-                    img.save(buffered, format=fmt)
+                    mime = "image/jpeg" if ext in ["jpg", "jpeg"] else "image/png"
+                    img.save(buffered, format=fmt, quality=70)
                     b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
                     grid_imgs_html += f'<img src="data:{mime};base64,{b64}" class="bg-tile" />'
             except Exception:
@@ -320,7 +322,6 @@ if selected == "ホーム":
         gap: 6px;
         padding: 6px;
         opacity: 0.85;
-        /* 全キャラが上から下へ流れるアニメーション */
         animation: stream-down 25s linear infinite;
     }}
 
@@ -343,7 +344,7 @@ if selected == "ホーム":
     .center-overlay {{
         position: relative;
         z-index: 2;
-        background: rgba(0, 0, 0, 0.70);
+        background: rgba(0, 0, 0, 0.75);
         backdrop-filter: blur(4px);
         padding: 35px 50px;
         border-radius: 16px;
@@ -355,20 +356,20 @@ if selected == "ホーム":
     
     .center-overlay h1 {{
         margin: 0 0 10px 0;
-        font-size: 2.5rem;
+        font-size: 2.2rem;
         color: #ffffff;
         font-weight: 900;
-        text-shadow: 3px 3px 6px #000000, -2px -2px 4px #000000, 2px -2px 4px #000000, -2px 2px 4px #000000;
+        text-shadow: 2px 2px 4px #000000;
         letter-spacing: 2px;
     }}
     
     .center-overlay p {{
         margin: 0;
         color: #ffcc00;
-        font-size: 1.25rem;
+        font-size: 1.1rem;
         font-weight: 700;
-        text-shadow: 2px 2px 4px #000000, -1px -1px 2px #000000;
-        letter-spacing: 3px;
+        text-shadow: 1px 1px 2px #000000;
+        letter-spacing: 2px;
     }}
     </style>
 
