@@ -1,3 +1,4 @@
+import base64
 import glob
 import io
 import math
@@ -5,7 +6,6 @@ import os
 import random
 import re
 import time
-import base64
 import pandas as pd
 import streamlit as st
 from PIL import Image
@@ -102,12 +102,10 @@ def display_question_image(row, width=200, show_caption=True):
                     # ローカルファイルの場合（日本語ファイル名対策としてPILで安全に開く）
                     with Image.open(resolved_path) as img:
                         img_bytes = img.copy()
-                        st.image(
-                            img_bytes,
-                            caption=cap,
-                            width=width,
-                            use_container_width=(width is None)
-                        )
+                        if width is None:
+                            st.image(img_bytes, caption=cap, use_container_width="stretch")
+                        else:
+                            st.image(img_bytes, caption=cap, width=width)
             except Exception as e:
                 st.warning(f"⚠️ 画像の表示エラー: {raw_path} ({e})")
         else:
@@ -240,8 +238,12 @@ with st.sidebar:
 # 全データ取得
 df_all = load_all_data()
 
-# --- 1. ホーム画面 ---
+# --- 1. ホーム画面 (クラッシュ防止・軽量表示化) ---
 if selected == "ホーム":
+    st.title("🏴‍☠️ ONE PIECE ナレッジキング対策")
+    st.caption("― 最強のデータベースを脳に刻め ―")
+    st.divider()
+
     all_imgs = (
         glob.glob("images/*.png")
         + glob.glob("images/*.jpg")
@@ -250,120 +252,31 @@ if selected == "ホーム":
         + glob.glob("*.jpg")
     )
 
-    grid_imgs_html = ""
     if all_imgs:
-        sample_imgs = [random.choice(all_imgs) for _ in range(60)]
-        for img_path in sample_imgs:
-            try:
-                with Image.open(img_path) as img:
-                    buffered = io.BytesIO()
-                    ext = img_path.split(".")[-1].lower()
-                    fmt = "JPEG" if ext in ["jpg", "jpeg"] else "PNG"
-                    mime = "image/jpeg" if ext in ["jpg", "jpeg"] else "image/png"
-                    img.save(buffered, format=fmt)
-                    b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
-                    grid_imgs_html += f'<img src="data:{mime};base64,{b64}" class="bg-tile" />'
-            except Exception:
-                continue
-
-    banner_html = f"""
-    <style>
-    .wt100-container {{
-        position: relative;
-        width: 100%;
-        height: 420px;
-        border-radius: 16px;
-        overflow: hidden;
-        border: 2px solid #333;
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
-        background-color: #0d0d0d;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }}
-    
-    .mosaic-bg {{
-        position: absolute;
-        top: -50%;
-        left: 0;
-        width: 100%;
-        height: 200%;
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(85px, 1fr));
-        grid-auto-rows: 85px;
-        gap: 3px;
-        opacity: 0.85;
-        animation: scroll-down 10s linear infinite;
-    }}
-
-    @keyframes scroll-down {{
-        0% {{
-            transform: translateY(0);
-        }}
-        100% {{
-            transform: translateY(25%);
-        }}
-    }}
-    
-    .bg-tile {{
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-    }}
-
-    .center-overlay {{
-        position: relative;
-        z-index: 2;
-        background: transparent;
-        backdrop-filter: blur(2px);
-        padding: 35px 50px;
-        border-radius: 16px;
-        border: 3px solid #ffcc00;
-        text-align: center;
-        box-shadow: 0 0 25px rgba(255, 204, 0, 0.5), inset 0 0 15px rgba(0, 0, 0, 0.5);
-        max-width: 85%;
-    }}
-    
-    .center-overlay h1 {{
-        margin: 0 0 10px 0;
-        font-size: 2.5rem;
-        color: #ffffff;
-        font-weight: 900;
-        text-shadow: 3px 3px 6px #000000, -2px -2px 4px #000000, 2px -2px 4px #000000, -2px 2px 4px #000000;
-        letter-spacing: 2px;
-    }}
-    
-    .center-overlay p {{
-        margin: 0;
-        color: #ffcc00;
-        font-size: 1.25rem;
-        font-weight: 700;
-        text-shadow: 2px 2px 4px #000000, -1px -1px 2px #000000;
-        letter-spacing: 3px;
-    }}
-    </style>
-
-    <div class="wt100-container">
-        <div class="mosaic-bg">
-            {grid_imgs_html if grid_imgs_html else '<div style="grid-column: 1/-1; text-align:center; color:#888; padding-top:180px;">（画像を追加すると背景にモザイク表示されます）</div>'}
-        </div>
-        <div class="center-overlay">
-            <h1>🏴‍☠️ ONE PIECE ナレッジキング対策</h1>
-            <p>― 最強のデータベースを脳に刻め ―</p>
-        </div>
-    </div>
-    """
-
-    st.markdown(banner_html, unsafe_allow_html=True)
-    st.write("")
+        st.subheader("🖼️ キャラクターギャラリー")
+        # 描画負荷軽減のため15枚に制限
+        sample_imgs = random.sample(all_imgs, min(len(all_imgs), 15))
+        cols = st.columns(5)
+        for idx, img_path in enumerate(sample_imgs):
+            if os.path.exists(img_path):
+                with cols[idx % 5]:
+                    try:
+                        st.image(img_path, use_container_width="stretch")
+                    except Exception:
+                        pass
+        st.write("")
+        if st.button("🔀 画像をシャッフル"):
+            st.rerun()
+        st.divider()
 
     if df_all.empty:
         st.warning(
-            "現在、読み込めるExcelデータ（.xlsx）がありません。GitHubにExcelファイルをアップロードしてください。"
+            "現在、読み込めるExcelデータ（.xlsx）がありません。リポジトリにExcelファイルを配置してください。"
         )
     else:
+        st.success(f"✅ データベース接続完了: 合計 {len(df_all)} 件の問題データが登録されています。")
         st.info(
-            f"👈 左側のメニューから機能を選択してください。（登録済データ: {len(df_all)} 件）"
+            "👈 左側のメニューから機能を選択してください。"
         )
 
 # --- 2. 練習モード ---
@@ -402,7 +315,7 @@ elif selected == "📖 練習モード":
                     "問題タイプ", ["すべて", "記述問題", "並び替え問題", "キャラマスター"]
                 )
 
-            if st.button("🚀 練習を開始する", use_container_width=True):
+            if st.button("🚀 練習を開始する", use_container_width="stretch"):
                 target_df = df_all.copy()
                 if q_type_filter == "記述問題" and "type" in target_df.columns:
                     target_df = target_df[target_df["type"] == "記述"]
@@ -440,7 +353,7 @@ elif selected == "📖 練習モード":
                 )
                 res_df = pd.DataFrame(st.session_state.p_user_answers)
                 if not res_df.empty:
-                    st.dataframe(res_df, use_container_width=True)
+                    st.dataframe(res_df, use_container_width="stretch")
 
                 if st.button("🔄 もう一度練習する"):
                     st.session_state.practice_started = False
@@ -514,11 +427,11 @@ elif selected == "📖 練習モード":
                     sub_c1, sub_c2 = st.columns(2)
                     with sub_c1:
                         submitted = st.form_submit_button(
-                            "回答する", use_container_width=True
+                            "回答する", use_container_width="stretch"
                         )
                     with sub_c2:
                         passed = st.form_submit_button(
-                            "パス", use_container_width=True
+                            "パス", use_container_width="stretch"
                         )
 
                 if submitted:
@@ -580,7 +493,7 @@ elif selected == "🏆 本番模試（50問/60分）":
                 "※本番同様、テスト挑戦中は途中で正解が表示されません。最後に総合結果が出力されます。"
             )
 
-            if st.button("🔥 模試を開始する（タイマースタート）", use_container_width=True):
+            if st.button("🔥 模試を開始する（タイマースタート）", use_container_width="stretch"):
                 shuffled = df_all.sample(n=min(50, len(df_all))).reset_index(
                     drop=True
                 )
@@ -642,7 +555,7 @@ elif selected == "🏆 本番模試（50問/60分）":
                 )
                 st.write("---")
                 st.subheader("📋 解答一覧と詳細")
-                st.dataframe(pd.DataFrame(summary_data), use_container_width=True)
+                st.dataframe(pd.DataFrame(summary_data), use_container_width="stretch")
 
                 if st.button("🔄 もう一度模試を受ける"):
                     st.session_state.exam_started = False
@@ -698,11 +611,11 @@ elif selected == "🏆 本番模試（50問/60分）":
                     col_b1, col_b2 = st.columns(2)
                     with col_b1:
                         sub_next = st.form_submit_button(
-                            "回答して次の問題へ ➡", use_container_width=True
+                            "回答して次の問題へ ➡", use_container_width="stretch"
                         )
                     with col_b2:
                         sub_skip = st.form_submit_button(
-                            "スキップ", use_container_width=True
+                            "スキップ", use_container_width="stretch"
                         )
 
                 if sub_next:
@@ -810,7 +723,7 @@ elif selected == "🔍 AI検索モード":
                 if exp:
                     st.write(f"**解説:** {exp}")
 
-                if st.button("🛠️ このデータを編集・修正する", use_container_width=True):
+                if st.button("🛠️ このデータを編集・修正する", use_container_width="stretch"):
                     target_kw = name_val or get_clean_str(selected_item.get("image") or selected_item.get("画像")) or q_text
                     st.session_state["edit_search_keyword"] = target_kw
                     st.session_state["edit_active_tab"] = 1
@@ -824,7 +737,7 @@ elif selected == "🔍 AI検索モード":
                 filtered_df,
                 on_select="rerun",
                 selection_mode="single-row",
-                use_container_width=True,
+                use_container_width="stretch",
                 key="df_search_select"
             )
 
@@ -1187,7 +1100,7 @@ elif selected == "➕ データ追加・編集":
 
                 with nav_col1:
                     st.write("")
-                    if st.button("◀ 前へ", use_container_width=True, disabled=(st.session_state["edit_sub_idx"] <= 0)):
+                    if st.button("◀ 前へ", use_container_width="stretch", disabled=(st.session_state["edit_sub_idx"] <= 0)):
                         st.session_state["edit_sub_idx"] -= 1
                         st.rerun()
 
@@ -1214,7 +1127,7 @@ elif selected == "➕ データ追加・編集":
 
                 with nav_col3:
                     st.write("")
-                    if st.button("次へ ▶", use_container_width=True, disabled=(st.session_state["edit_sub_idx"] >= filtered_count - 1)):
+                    if st.button("次へ ▶", use_container_width="stretch", disabled=(st.session_state["edit_sub_idx"] >= filtered_count - 1)):
                         st.session_state["edit_sub_idx"] += 1
                         st.rerun()
 
@@ -1258,7 +1171,7 @@ elif selected == "➕ データ追加・編集":
                         e_opt4 = st.text_input("選択肢 4 / 右2", value=get_clean_str(target_row.get("option4") or target_row.get("right2")))
                         e_exp = st.text_area("解説（explanation）", value=get_clean_str(target_row.get("explanation")), height=100)
 
-                    submit_edit = st.form_submit_button("💾 修正内容を更新する", use_container_width=True)
+                    submit_edit = st.form_submit_button("💾 修正内容を更新する", use_container_width="stretch")
 
                     if submit_edit:
                         st.session_state["working_df"].at[selected_idx, "type"] = e_type
@@ -1292,11 +1205,11 @@ elif selected == "➕ データ追加・編集":
                     data=buffer_all.getvalue(),
                     file_name="quiz_data_updated.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True
+                    use_container_width="stretch"
                 )
 
             with exp_col2:
-                if st.button("🔄 修正を破棄して初期データに戻す", use_container_width=True):
+                if st.button("🔄 修正を破棄して初期データに戻す", use_container_width="stretch"):
                     st.session_state["working_df"] = pd.DataFrame()
                     st.session_state["added_data"] = pd.DataFrame()
                     st.session_state["edit_sub_idx"] = 0
