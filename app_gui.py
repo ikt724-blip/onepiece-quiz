@@ -249,6 +249,8 @@ df_all = load_all_data()
 
 # --- 1. ホーム画面 ---
 if selected == "ホーム":
+    import streamlit.components.v1 as components
+
     all_imgs = (
         glob.glob("images/*.png")
         + glob.glob("images/*.jpg")
@@ -256,6 +258,8 @@ if selected == "ホーム":
         + glob.glob("*.png")
         + glob.glob("*.jpg")
     )
+
+    wt100_full_html = ""
 
     if all_imgs:
         sample_imgs = random.sample(all_imgs, min(len(all_imgs), 50))
@@ -271,7 +275,6 @@ if selected == "ホーム":
                     columns_b64[img_idx % NUM_COLS].append(b64_str)
                     img_idx += 1
 
-        # 列ごとのHTML文字列を生成
         cols_html_list = []
         for i, col_imgs in enumerate(columns_b64):
             if not col_imgs:
@@ -408,13 +411,16 @@ if selected == "ホーム":
         </body>
         </html>
         """
-        
-        # iframe経由でHTMLを独立描画させることで描画崩れを完全防止
-        components.html(wt100_full_html, height=500)
 
-        if st.button("🔀 画像をシャッフル（再アニメーション）"):
-            st.rerun()
-        st.divider()
+    # HTMLが正常に生成されている場合のみレンダリング
+    if wt100_full_html:
+        components.html(wt100_full_html, height=500)
+    else:
+        st.warning("表示できる画像ファイル（.png / .jpg）が見つかりません。")
+
+    if st.button("🔀 画像をシャッフル（再アニメーション）"):
+        st.rerun()
+    st.divider()
 
     if df_all.empty:
         st.warning(
