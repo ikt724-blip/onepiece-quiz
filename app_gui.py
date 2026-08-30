@@ -891,7 +891,7 @@ elif selected == "🔍 AI検索モード":
                 if exp:
                     st.write(f"**解説:** {exp}")
 
-                if st.button("🛠️ このデータを編集・修正する", use_container_width="stretch"):
+                if st.button("🛠️ このデータを編集・修正する", use_container_width=True):
                     target_kw = name_val or get_clean_str(selected_item.get("image") or selected_item.get("画像")) or q_text
                     st.session_state["edit_search_keyword"] = target_kw
                     st.session_state["edit_active_tab"] = 1
@@ -905,7 +905,7 @@ elif selected == "🔍 AI検索モード":
                 filtered_df,
                 on_select="rerun",
                 selection_mode="single-row",
-                use_container_width="stretch",
+                use_container_width=True,
                 key="df_search_select"
             )
 
@@ -914,7 +914,6 @@ elif selected == "🔍 AI検索モード":
                 if picked_row != st.session_state["search_selected_index"]:
                     st.session_state["search_selected_index"] = picked_row
                     st.rerun()
-
 
 # --- 6. データ追加・編集モード ---
 elif selected == "➕ データ追加・編集":
@@ -935,7 +934,6 @@ elif selected == "➕ データ追加・編集":
         label_visibility="collapsed"
     )
 
-    # 補助関数：working_dfに安全に新規行を追加する処理
     def append_to_working_df(new_item_dict):
         new_df = pd.DataFrame([new_item_dict])
         st.session_state["added_data"] = pd.concat([st.session_state["added_data"], new_df], ignore_index=True)
@@ -955,7 +953,6 @@ elif selected == "➕ データ追加・編集":
             "✏️ 自由記述"
         ])
 
-        # --- 👤 キャラデータ ---
         with add_tab_char:
             st.markdown("##### キャラクターマスターの追加")
             with st.form("char_form", clear_on_submit=True):
@@ -973,7 +970,7 @@ elif selected == "➕ データ追加・編集":
                             "type": "キャラデータ",
                             "characterid": c_id,
                             "name": c_name,
-                            "question": c_name,  # 編集画面での互換性維持
+                            "question": c_name,
                             "image": c_img,
                             "nickname": c_nick,
                             "devil_fruit": c_fruit,
@@ -985,7 +982,6 @@ elif selected == "➕ データ追加・編集":
                     else:
                         st.error("キャラクター名は必須項目です。")
 
-        # --- 🎯 一問一答 ---
         with add_tab_1to1:
             st.markdown("##### 一問一答クイズの追加")
             with st.form("form_1to1", clear_on_submit=True):
@@ -1022,7 +1018,6 @@ elif selected == "➕ データ追加・編集":
                     else:
                         st.error("入力漏れがあります。")
 
-        # --- ☑️ 一問多答 ---
         with add_tab_multi:
             st.markdown("##### 一問多答クイズの追加")
             with st.form("form_multi", clear_on_submit=True):
@@ -1065,7 +1060,6 @@ elif selected == "➕ データ追加・編集":
                         append_to_working_df(new_item)
                         st.success("一問多答問題を追加しました！")
 
-        # --- 🔢 順序選択 ---
         with add_tab_order:
             st.markdown("##### 順序選択クイズの追加")
             with st.form("form_order", clear_on_submit=True):
@@ -1098,7 +1092,6 @@ elif selected == "➕ データ追加・編集":
                         append_to_working_df(new_item)
                         st.success("順序選択問題を追加しました！")
 
-        # --- 🔤 6文字並べ替え ---
         with add_tab_6char:
             st.markdown("##### 6文字並べ替えクイズの追加")
             with st.form("form_6char", clear_on_submit=True):
@@ -1128,7 +1121,6 @@ elif selected == "➕ データ追加・編集":
                         append_to_working_df(new_item)
                         st.success("6文字並べ替え問題を追加しました！")
 
-        # --- 🔗 組み合わせ ---
         with add_tab_pair:
             st.markdown("##### 組み合わせクイズの追加")
             with st.form("form_pair", clear_on_submit=True):
@@ -1162,7 +1154,6 @@ elif selected == "➕ データ追加・編集":
                         append_to_working_df(new_item)
                         st.success("組み合わせ問題を追加しました！")
 
-        # --- ✏️ 自由記述 ---
         with add_tab_free:
             st.markdown("##### 自由記述クイズの追加")
             with st.form("form_free", clear_on_submit=True):
@@ -1343,7 +1334,6 @@ elif selected == "➕ データ追加・編集":
                     with col_e2:
                         e_answer = st.text_input("正解（answer）", value=get_clean_str(target_row.get("answer")))
                         
-                        # タイプに応じたラベル表示
                         if curr_type == "組み合わせ":
                             lbl1, lbl2, lbl3, lbl4 = "左1 (left1)", "右1 (right1)", "左2 (left2)", "右2 (right2)"
                         else:
@@ -1358,7 +1348,6 @@ elif selected == "➕ データ追加・編集":
                     submit_edit = st.form_submit_button("💾 修正内容を更新する", use_container_width=True)
 
                     if submit_edit:
-                        # 安全に列を割り当てる内部関数
                         def safe_assign(col_name, val):
                             if col_name not in st.session_state["working_df"].columns:
                                 st.session_state["working_df"][col_name] = None
@@ -1409,48 +1398,13 @@ elif selected == "➕ データ追加・編集":
                     st.session_state["added_data"] = pd.DataFrame()
                     st.session_state["edit_sub_idx"] = 0
                     st.rerun()
-import streamlit as st
-import pandas as pd
 
-# --- 共通関数の定義（未定義エラー防止） ---
-def get_clean_str(val):
-    if pd.isna(val) or val is None:
-        return ""
-    s = str(val).strip()
-    return "" if s.lower() in ["nan", "none", "<na>"] else s
-
-# --- 1. サイドバー（ナビセンター） ---
-with st.sidebar:
-    st.title("🏴 ナビセンター")
-    
-    # 選択肢の文字列を「🏴 キャラクターデータ」で統一
-    menu_options = [
-        "🏠 ホーム",
-        "📖 練習モード",
-        "🏆 本番模試（50問/60分）",
-        "⚠️ 苦手克服",
-        "🔍 AI検索モード",
-        "➕ データ追加・編集",
-        "🏴 キャラクターデータ"  # ← ここに正確に記述
-    ]
-    
-    selected = st.radio("メニュー", menu_options, label_visibility="collapsed")
-
-# --- 他の画面処理（既存の if / elif ブロック） ---
-if selected == "🏠 ホーム":
-    st.title("ホーム")
-
-elif selected == "➕ データ追加・編集":
-    st.title("➕ データ追加・編集センター")
-    # （既存の編集コード）
-
-# --- 7. 最下部に追加するキャラクターデータ処理 ---
+# --- 7. キャラクターデータモード ---
 elif selected == "🏴 キャラクターデータ":
     st.title("🏴 キャラクター名鑑")
     st.caption("登録されているキャラクターの一覧・詳細情報を閲覧できます。")
     st.write("---")
 
-    # データの読み込み判定
     if "working_df" in st.session_state and not st.session_state["working_df"].empty:
         base_df = st.session_state["working_df"]
     elif "df_all" in globals() and isinstance(df_all, pd.DataFrame):
@@ -1458,7 +1412,6 @@ elif selected == "🏴 キャラクターデータ":
     else:
         base_df = pd.DataFrame()
 
-    # キャラデータの抽出
     if not base_df.empty and "type" in base_df.columns:
         char_df = base_df[base_df["type"].astype(str).str.strip() == "キャラデータ"].copy()
     else:
@@ -1467,7 +1420,6 @@ elif selected == "🏴 キャラクターデータ":
     if char_df.empty:
         st.info("登録されているキャラクターデータがありません。「➕ データ追加・編集」タブからキャラデータを追加してください。")
     else:
-        # 絞り込み検索
         c_search1, c_search2 = st.columns([2, 1])
         with c_search1:
             search_kw = st.text_input("🔍 キャラクター検索（名前・異名・所属など）", placeholder="例: ルフィ、麦わら")
@@ -1479,7 +1431,6 @@ elif selected == "🏴 キャラクターデータ":
                 ftype_options.extend(valid_types)
             selected_ftype = st.selectbox("悪魔の実の系統", options=ftype_options)
 
-        # フィルタリング実行
         filtered_char = char_df.copy()
         if search_kw:
             mask = filtered_char.astype(str).apply(lambda x: x.str.contains(search_kw, case=False, na=False)).any(axis=1)
@@ -1490,7 +1441,6 @@ elif selected == "🏴 キャラクターデータ":
         st.write(f"該当件数: **{len(filtered_char)}** 件")
         st.write("---")
 
-        # カード型表示
         cols = st.columns(3)
         for idx, (_, row) in enumerate(filtered_char.iterrows()):
             with cols[idx % 3]:
@@ -1515,4 +1465,10 @@ elif selected == "🏴 キャラクターデータ":
                     st.write(f"**所属:** {c_aff or '不明'}")
                     st.write(f"**悪魔の実:** {c_fruit or 'なし'}")
                     if c_ftype:
-                        st.write(f"**系統:** `{c_ftype}`")
+                        st.write(f"**系統:** {c_ftype}")
+
+                    if st.button("✏️ 編集", key=f"btn_edit_char_{idx}", use_container_width=True):
+                        st.session_state["edit_search_keyword"] = c_name
+                        st.session_state["edit_active_tab"] = 1
+                        st.session_state["current_nav"] = "➕ データ追加・編集"
+                        st.rerun()
