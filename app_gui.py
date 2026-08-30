@@ -262,7 +262,7 @@ if selected == "ホーム":
     wt100_full_html = ""
 
     if all_imgs:
-        sample_imgs = random.sample(all_imgs, min(len(all_imgs), 50))
+        sample_imgs = random.sample(all_imgs, min(len(all_imgs), 60))
         
         NUM_COLS = 6
         columns_b64 = [[] for _ in range(NUM_COLS)]
@@ -302,12 +302,18 @@ if selected == "ホーム":
         <head>
         <style>
         * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-        body {{ background-color: #0e1117; font-family: sans-serif; overflow: hidden; }}
+        html, body {{
+            width: 100%;
+            height: 100%;
+            background-color: #0e1117;
+            font-family: sans-serif;
+            overflow: hidden;
+        }}
 
         .wt-hero-container {{
             position: relative;
             width: 100%;
-            height: 480px;
+            height: 600px; /* 表示領域の大きさを指定 */
             background-color: #000;
             overflow: hidden;
             border-radius: 12px;
@@ -317,8 +323,8 @@ if selected == "ホーム":
             display: flex;
             width: 100%;
             height: 100%;
-            gap: 2px;
-            opacity: 0.8;
+            gap: 0px; /* 隙間をなくして全画面密着 */
+            opacity: 0.85;
         }}
 
         .scroll-column {{
@@ -331,14 +337,14 @@ if selected == "ホーム":
         .scroll-track {{
             display: flex;
             flex-direction: column;
-            gap: 2px;
+            gap: 0px;
             width: 100%;
         }}
 
         .scroll-img {{
             width: 100%;
-            height: 110px;
-            object-fit: cover;
+            height: 150px; /* 画像1枚の高さを拡大 */
+            object-fit: cover; /* 枠いっぱいに拡大してトリミング */
             display: block;
         }}
 
@@ -356,8 +362,8 @@ if selected == "ホーム":
         .col-up .scroll-track {{ animation: scrollUp linear infinite; }}
 
         .speed-1 .scroll-track {{ animation-duration: 20s; }}
-        .speed-2 .scroll-track {{ animation-duration: 28s; }}
-        .speed-3 .scroll-track {{ animation-duration: 35s; }}
+        .speed-2 .scroll-track {{ animation-duration: 26s; }}
+        .speed-3 .scroll-track {{ animation-duration: 32s; }}
 
         .wt-overlay {{
             position: absolute;
@@ -381,7 +387,7 @@ if selected == "ホーム":
         }}
 
         .wt-title h1 {{
-            font-size: 2.2rem;
+            font-size: 2.6rem;
             font-weight: 900;
             margin: 0;
             letter-spacing: 2px;
@@ -389,10 +395,10 @@ if selected == "ホーム":
         }}
 
         .wt-title p {{
-            font-size: 1rem;
+            font-size: 1.1rem;
             color: #ff3b30;
             font-weight: bold;
-            margin-top: 6px;
+            margin-top: 8px;
         }}
         </style>
         </head>
@@ -412,9 +418,8 @@ if selected == "ホーム":
         </html>
         """
 
-    # HTMLが正常に生成されている場合のみレンダリング
     if wt100_full_html:
-        components.html(wt100_full_html, height=500)
+        components.html(wt100_full_html, height=620)
     else:
         st.warning("表示できる画像ファイル（.png / .jpg）が見つかりません。")
 
