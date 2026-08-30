@@ -1088,15 +1088,19 @@ elif selected == "➕ データ追加・編集":
                         st.success("自由記述問題を追加しました！")
 
    # ----------------------------------------------------
-    # 【2. データの編集・修正（エラー完全解消・動作安定版）】
+    # 【2. データの編集・修正（エラー完全解消・高速化・プルダウン対応 完全版）】
     # ----------------------------------------------------
     elif tab_selection == "✏️ 2. データの編集・修正":
         st.subheader("🛠️ かんたん問題修正フォーム")
 
-        # セッション状態の初期化
+        # --- ⚡ データの初期化（最初の1回だけ実行してキャッシュ） ---
         if "working_df" not in st.session_state or st.session_state["working_df"].empty:
-            merged = pd.concat([df_all, st.session_state["added_data"]], ignore_index=True)
-            st.session_state["working_df"] = merged.reset_index(drop=True)
+            with st.spinner("データを読み込み中..."):
+                if "added_data" in st.session_state and not st.session_state["added_data"].empty:
+                    merged = pd.concat([df_all, st.session_state["added_data"]], ignore_index=True)
+                else:
+                    merged = df_all.copy()
+                st.session_state["working_df"] = merged.reset_index(drop=True)
 
         current_df = st.session_state["working_df"]
 
@@ -1107,27 +1111,37 @@ elif selected == "➕ データ追加・編集":
             st.markdown("##### 🔍 表示する問題を絞り込む")
             f_col1, f_col2, f_col3 = st.columns([2, 2, 3])
 
-            # ストーリー（編）列の自動検出
-            story_col_name = None
-            possible_story_cols = ["story", "編", "章", "chapter", "category", "カテゴリ", "arc", "エピソード"]
-            for c in possible_story_cols:
-                if c in current_df.columns:
-                    story_col_name = c
-                    break
+            # ストーリー（編）列の判定と選択肢キャッシュ
+            if "cached_story_options" not in st.session_state or "story_col_name" not in st.session_state:
+                story_col_name = None
+                possible_story_cols = ["story", "編", "章", "chapter", "category", "カテゴリ", "arc", "エピソード"]
+                for c in possible_story_cols:
+                    if c in current_df.columns:
+                        story_col_name = c
+                        break
+                st.session_state["story_col_name"] = story_col_name
 
-            story_options = ["すべて"]
-            if story_col_name:
-                valid_stories = sorted([str(s).strip() for s in current_df[story_col_name].dropna().unique() if str(s).strip() and str(s).lower() != "nan"])
-                story_options.extend(valid_stories)
+                if story_col_name:
+                    v_stories = sorted([str(s).strip() for s in current_df[story_col_name].dropna().unique() if str(s).strip() and str(s).lower() != "nan"])
+                    st.session_state["cached_story_options"] = ["すべて"] + v_stories
+                else:
+                    st.session_state["cached_story_options"] = ["すべて"]
+
+            story_col_name = st.session_state["story_col_name"]
+            story_options = st.session_state["cached_story_options"]
 
             with f_col1:
                 selected_story = st.selectbox("ストーリー（編）", options=story_options, key="filter_story")
 
-            # 出題タイプ列の取得
-            type_options = ["すべて"]
-            if "type" in current_df.columns:
-                valid_types = sorted([str(t).strip() for t in current_df["type"].dropna().unique() if str(t).strip() and str(t).lower() != "nan"])
-                type_options.extend(valid_types)
+            # 出題タイプ選択肢のキャッシュ
+            if "cached_type_options" not in st.session_state:
+                if "type" in current_df.columns:
+                    v_types = sorted([str(t).strip() for t in current_df["type"].dropna().unique() if str(t).strip() and str(t).lower() != "nan"])
+                    st.session_state["cached_type_options"] = ["すべて"] + v_types
+                else:
+                    st.session_state["cached_type_options"] = ["すべて"]
+
+            type_options = st.session_state["cached_type_options"]
 
             with f_col2:
                 selected_type = st.selectbox("出題形式", options=type_options, key="filter_type")
@@ -1135,8 +1149,8 @@ elif selected == "➕ データ追加・編集":
             with f_col3:
                 keyword = st.text_input("キーワード検索（問題文・解説等）", placeholder="例：ルフィ、アラバスタ")
 
-            # フィルタリング処理
-            filtered_df = current_df.copy()
+            # ⚡ 高速フィルタリング処理
+            filtered_df = current_df
             if selected_story != "すべて" and story_col_name:
                 filtered_df = filtered_df[filtered_df[story_col_name].astype(str).str.strip() == selected_story]
             if selected_type != "すべて" and "type" in filtered_df.columns:
@@ -1151,33 +1165,28 @@ elif selected == "➕ データ追加・編集":
             if filtered_count == 0:
                 st.warning("条件に一致する問題が見つかりませんでした。フィルター条件を変更してください。")
             else:
-                # インデックスの安全な初期化
+                # インデックスの位置管理
                 if "edit_sub_idx" not in st.session_state:
                     st.session_state["edit_sub_idx"] = 0
-
-                # 範囲外チェック
                 if st.session_state["edit_sub_idx"] >= filtered_count:
                     st.session_state["edit_sub_idx"] = 0
 
                 st.write("---")
 
-                # ナビゲーションボタン（前へ）
+                # --- ◀ 前へ / プルダウン / 次へ ▶ ナビゲーション ---
                 nav_col1, nav_col2, nav_col3 = st.columns([1, 4, 1])
 
                 with nav_col1:
-                    st.write("") # 高さ微調整
+                    st.write("") # 高さ調整
                     if st.button("◀ 前へ", use_container_width=True, disabled=(st.session_state["edit_sub_idx"] <= 0)):
                         st.session_state["edit_sub_idx"] -= 1
                         st.rerun()
 
-                # プルダウンの選択肢構築
-                options_dict = {}
-                for sub_i, r in filtered_df.iterrows():
-                    orig_i = r["index"]
-                    q_type = get_clean_str(r.get("type")) or "未設定"
-                    q_txt = get_clean_str(r.get("question") or r.get("name") or r.get("名前")) or "無題"
-                    label = f"[{sub_i + 1}/{filtered_count}] (全{orig_i + 1}件目) 【{q_type}】 {q_txt[:25]}"
-                    options_dict[sub_i] = label
+                # プルダウン用辞書の高速生成
+                options_dict = {
+                    sub_i: f"[{sub_i + 1}/{filtered_count}] (全{r['index'] + 1}件目) 【{get_clean_str(r.get('type')) or '未設定'}】 {get_clean_str(r.get('question') or r.get('name'))[:25]}"
+                    for sub_i, r in filtered_df.iterrows()
+                }
 
                 with nav_col2:
                     current_idx_val = st.session_state["edit_sub_idx"]
@@ -1188,18 +1197,18 @@ elif selected == "➕ データ追加・編集":
                         index=current_idx_val,
                         key=f"select_box_sub_{current_idx_val}"
                     )
-                    
+
                     if selected_sub_idx != st.session_state["edit_sub_idx"]:
                         st.session_state["edit_sub_idx"] = selected_sub_idx
                         st.rerun()
 
                 with nav_col3:
-                    st.write("") # 高さ微調整
+                    st.write("") # 高さ調整
                     if st.button("次へ ▶", use_container_width=True, disabled=(st.session_state["edit_sub_idx"] >= filtered_count - 1)):
                         st.session_state["edit_sub_idx"] += 1
                         st.rerun()
 
-                # 選択対象データの特定
+                # 選択対象データの抽出
                 current_sub_idx = st.session_state["edit_sub_idx"]
                 target_sub_row = filtered_df.iloc[current_sub_idx]
                 selected_idx = target_sub_row["index"]
@@ -1218,15 +1227,13 @@ elif selected == "➕ データ追加・編集":
                     st.write(f"**問題:** {q_val or '（なし）'}")
                     st.write(f"**正解:** {a_val or '（なし）'}")
 
-               # 修正フォーム
+                # --- 📝 修正フォーム ---
                 with st.form(f"quick_edit_form_{selected_idx}"):
                     col_e1, col_e2 = st.columns(2)
                     with col_e1:
-                        # --- 出題種別をプルダウンに変更 ---
+                        # 出題種別（プルダウン選択肢）
                         type_list = ["キャラデータ", "一問一答", "一問多答", "順序選択", "6文字並べ替え", "組み合わせ", "自由記述"]
                         curr_type = get_clean_str(target_row.get("type"))
-                        
-                        # 既存の値が選択肢にない場合は自動でリストに追加
                         if curr_type and curr_type not in type_list:
                             type_list.append(curr_type)
                         
@@ -1256,7 +1263,7 @@ elif selected == "➕ データ追加・編集":
                         st.session_state["working_df"].at[selected_idx, "image"] = e_q_img or e_a_img
                         st.session_state["working_df"].at[selected_idx, "answer"] = e_answer
                         st.session_state["working_df"].at[selected_idx, "explanation"] = e_exp
-                        
+
                         if "option1" in current_df.columns: st.session_state["working_df"].at[selected_idx, "option1"] = e_opt1
                         if "option2" in current_df.columns: st.session_state["working_df"].at[selected_idx, "option2"] = e_opt2
                         if "option3" in current_df.columns: st.session_state["working_df"].at[selected_idx, "option3"] = e_opt3
@@ -1267,7 +1274,7 @@ elif selected == "➕ データ追加・編集":
 
             st.write("---")
             st.markdown("##### 📥 修正済みデータの書き出し")
-            
+
             exp_col1, exp_col2 = st.columns(2)
             with exp_col1:
                 buffer_all = io.BytesIO()
@@ -1281,10 +1288,12 @@ elif selected == "➕ データ追加・編集":
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     use_container_width=True
                 )
-            
+
             with exp_col2:
                 if st.button("🔄 修正を破棄して初期データに戻す", use_container_width=True):
                     st.session_state["working_df"] = pd.DataFrame()
                     st.session_state["added_data"] = pd.DataFrame()
                     st.session_state["edit_sub_idx"] = 0
+                    if "cached_story_options" in st.session_state: del st.session_state["cached_story_options"]
+                    if "cached_type_options" in st.session_state: del st.session_state["cached_type_options"]
                     st.rerun()
