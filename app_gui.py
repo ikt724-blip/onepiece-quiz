@@ -1409,3 +1409,110 @@ elif selected == "➕ データ追加・編集":
                     st.session_state["added_data"] = pd.DataFrame()
                     st.session_state["edit_sub_idx"] = 0
                     st.rerun()
+import streamlit as st
+import pandas as pd
+
+# --- 共通関数の定義（未定義エラー防止） ---
+def get_clean_str(val):
+    if pd.isna(val) or val is None:
+        return ""
+    s = str(val).strip()
+    return "" if s.lower() in ["nan", "none", "<na>"] else s
+
+# --- 1. サイドバー（ナビセンター） ---
+with st.sidebar:
+    st.title("🏴 ナビセンター")
+    
+    # 選択肢の文字列を「🏴 キャラクターデータ」で統一
+    menu_options = [
+        "🏠 ホーム",
+        "📖 練習モード",
+        "🏆 本番模試（50問/60分）",
+        "⚠️ 苦手克服",
+        "🔍 AI検索モード",
+        "➕ データ追加・編集",
+        "🏴 キャラクターデータ"  # ← ここに正確に記述
+    ]
+    
+    selected = st.radio("メニュー", menu_options, label_visibility="collapsed")
+
+# --- 他の画面処理（既存の if / elif ブロック） ---
+if selected == "🏠 ホーム":
+    st.title("ホーム")
+
+elif selected == "➕ データ追加・編集":
+    st.title("➕ データ追加・編集センター")
+    # （既存の編集コード）
+
+# --- 7. 最下部に追加するキャラクターデータ処理 ---
+elif selected == "🏴 キャラクターデータ":
+    st.title("🏴 キャラクター名鑑")
+    st.caption("登録されているキャラクターの一覧・詳細情報を閲覧できます。")
+    st.write("---")
+
+    # データの読み込み判定
+    if "working_df" in st.session_state and not st.session_state["working_df"].empty:
+        base_df = st.session_state["working_df"]
+    elif "df_all" in globals() and isinstance(df_all, pd.DataFrame):
+        base_df = df_all.copy()
+    else:
+        base_df = pd.DataFrame()
+
+    # キャラデータの抽出
+    if not base_df.empty and "type" in base_df.columns:
+        char_df = base_df[base_df["type"].astype(str).str.strip() == "キャラデータ"].copy()
+    else:
+        char_df = pd.DataFrame()
+
+    if char_df.empty:
+        st.info("登録されているキャラクターデータがありません。「➕ データ追加・編集」タブからキャラデータを追加してください。")
+    else:
+        # 絞り込み検索
+        c_search1, c_search2 = st.columns([2, 1])
+        with c_search1:
+            search_kw = st.text_input("🔍 キャラクター検索（名前・異名・所属など）", placeholder="例: ルフィ、麦わら")
+        
+        with c_search2:
+            ftype_options = ["すべて"]
+            if "fruit_type" in char_df.columns:
+                valid_types = sorted([str(x).strip() for x in char_df["fruit_type"].dropna().unique() if str(x).strip()])
+                ftype_options.extend(valid_types)
+            selected_ftype = st.selectbox("悪魔の実の系統", options=ftype_options)
+
+        # フィルタリング実行
+        filtered_char = char_df.copy()
+        if search_kw:
+            mask = filtered_char.astype(str).apply(lambda x: x.str.contains(search_kw, case=False, na=False)).any(axis=1)
+            filtered_char = filtered_char[mask]
+        if selected_ftype != "すべて" and "fruit_type" in filtered_char.columns:
+            filtered_char = filtered_char[filtered_char["fruit_type"].astype(str).str.strip() == selected_ftype]
+
+        st.write(f"該当件数: **{len(filtered_char)}** 件")
+        st.write("---")
+
+        # カード型表示
+        cols = st.columns(3)
+        for idx, (_, row) in enumerate(filtered_char.iterrows()):
+            with cols[idx % 3]:
+                with st.container(border=True):
+                    img_val = get_clean_str(row.get("image") or row.get("question_image"))
+                    if img_val:
+                        st.image(img_val, use_container_width=True)
+                    else:
+                        st.caption("🖼️ No Image")
+
+                    c_name = get_clean_str(row.get("name") or row.get("question")) or "名称未設定"
+                    c_nick = get_clean_str(row.get("nickname"))
+                    c_fruit = get_clean_str(row.get("devil_fruit"))
+                    c_ftype = get_clean_str(row.get("fruit_type"))
+                    c_aff = get_clean_str(row.get("affiliation"))
+
+                    st.markdown(f"### {c_name}")
+                    if c_nick:
+                        st.caption(f"【異名】{c_nick}")
+                    
+                    st.write("---")
+                    st.write(f"**所属:** {c_aff or '不明'}")
+                    st.write(f"**悪魔の実:** {c_fruit or 'なし'}")
+                    if c_ftype:
+                        st.write(f"**系統:** `{c_ftype}`")
