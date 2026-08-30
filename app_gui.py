@@ -47,11 +47,11 @@ def get_clean_str(val):
     return s
 
 
-# --- 🖼️ 画像表示・フォルダ自動探索関数（改善版） ---
+# --- 🖼️ 画像表示・フォルダ自動探索関数（日本語ファイル名完全対応版） ---
 def display_question_image(row, width=200, show_caption=True):
     """
     指定された行データから画像パスを抽出し、
-    ローカルフォルダ（images/等）を含めて自動探索した上で縦一列に安全表示する関数
+    日本語ファイル名（王直.png等）でもエラーが出ないよう安全に画像を表示する関数
     """
     img_sources = []
     IMAGE_DIRS = ["images", "img", "static/images", "assets", "data/images", "."]
@@ -95,14 +95,21 @@ def display_question_image(row, width=200, show_caption=True):
 
         if resolved_path:
             try:
-                st.image(
-                    resolved_path,
-                    caption=cap,
-                    width=width,
-                    use_column_width=(width is None)
-                )
-            except Exception:
-                st.warning(f"⚠️ 画像の表示エラー: {raw_path}")
+                # Web上のURLの場合
+                if resolved_path.startswith("http"):
+                    st.image(resolved_path, caption=cap, width=width)
+                else:
+                    # ローカルファイルの場合（日本語ファイル名対策としてPILで安全に開く）
+                    with Image.open(resolved_path) as img:
+                        img_bytes = img.copy()
+                        st.image(
+                            img_bytes,
+                            caption=cap,
+                            width=width,
+                            use_container_width=(width is None)
+                        )
+            except Exception as e:
+                st.warning(f"⚠️ 画像の表示エラー: {raw_path} ({e})")
         else:
             st.info(f"📷 画像ファイルが見つかりません: `{raw_path}`")
 
@@ -248,10 +255,13 @@ if selected == "ホーム":
         sample_imgs = [random.choice(all_imgs) for _ in range(60)]
         for img_path in sample_imgs:
             try:
-                with open(img_path, "rb") as f:
-                    b64 = base64.b64encode(f.read()).decode("utf-8")
+                with Image.open(img_path) as img:
+                    buffered = io.BytesIO()
                     ext = img_path.split(".")[-1].lower()
+                    fmt = "JPEG" if ext in ["jpg", "jpeg"] else "PNG"
                     mime = "image/jpeg" if ext in ["jpg", "jpeg"] else "image/png"
+                    img.save(buffered, format=fmt)
+                    b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
                     grid_imgs_html += f'<img src="data:{mime};base64,{b64}" class="bg-tile" />'
             except Exception:
                 continue
@@ -283,7 +293,7 @@ if selected == "ホーム":
         grid-auto-rows: 85px;
         gap: 3px;
         opacity: 0.85;
-        animation: scroll-down 10s linear infinite; /* ⚡ 速度を25sから10sへ高速化 */
+        animation: scroll-down 10s linear infinite;
     }}
 
     @keyframes scroll-down {{
