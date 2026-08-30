@@ -258,60 +258,109 @@ if selected == "ホーム":
     )
 
     if all_imgs:
-        # WT100風に敷き詰めるため枚数を35枚程度に拡張
-        sample_imgs = random.sample(all_imgs, min(len(all_imgs), 35))
+        # 無限スクロールのループ用に画像を多め（50枚程度）に用意
+        sample_imgs = random.sample(all_imgs, min(len(all_imgs), 50))
         
-        # Base64化した画像タグを生成
-        html_images = ""
-        sizes = ["", "size-2x2", "", "size-1x2", "", "size-2x1", ""]  # モザイク感のアクセント
+        # 6つの縦列（カラム）に画像を分割して分配
+        NUM_COLS = 6
+        columns_b64 = [[] for _ in range(NUM_COLS)]
         
-        for idx, img_path in enumerate(sample_imgs):
+        img_idx = 0
+        for img_path in sample_imgs:
             if os.path.exists(img_path):
                 b64_str = image_to_base64(img_path)
                 if b64_str:
-                    size_cls = sizes[idx % len(sizes)]
-                    html_images += f'<img src="{b64_str}" class="wt-item {size_cls}" />'
+                    columns_b64[img_idx % NUM_COLS].append(b64_str)
+                    img_idx += 1
 
-        # WT100風レイアウトのCSS & HTML
+        # 各列の画像を生成（無限ループ用に同じ画像配列を2回繰り返すのがポイント）
+        cols_html = ""
+        for i, col_imgs in enumerate(columns_b64):
+            if not col_imgs:
+                continue
+            # シームレス接続のためにループさせる
+            duplicated_imgs = col_imgs + col_imgs
+            imgs_tags = "".join([f'<img src="{b64}" class="scroll-img" />' for b64 in duplicated_imgs])
+            
+            # 列ごとに方向や速度に変化をつけるクラス（例: odd / even）
+            col_class = "col-down" if i % 2 == 0 else "col-up"
+            speed_class = f"speed-{ (i % 3) + 1 }"
+            
+            cols_html += f"""
+            <div class="scroll-column {col_class} {speed_class}">
+                <div class="scroll-track">
+                    {imgs_tags}
+                </div>
+            </div>
+            """
+
         wt100_html = f"""
         <style>
+        /* コンテナ定義 */
         .wt-hero-container {{
             position: relative;
             width: 100%;
-            min-height: 520px;
+            height: 480px;
             background-color: #000;
             overflow: hidden;
             border-radius: 12px;
             margin-bottom: 20px;
         }}
-        .wt-grid {{
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(85px, 1fr));
-            grid-auto-rows: 85px;
-            grid-auto-flow: dense;
-            gap: 0 !important;
-            width: 100%;
-        }}
-        .wt-item {{
+
+        /* 縦スライドを収めるフレックスボックス */
+        .scroll-wrapper {{
+            display: flex;
             width: 100%;
             height: 100%;
+            gap: 2px;
+            opacity: 0.75; /* 背後の主張を少し抑えてタイトルを目立たせる */
+        }}
+
+        .scroll-column {{
+            flex: 1;
+            height: 100%;
+            overflow: hidden;
+            position: relative;
+        }}
+
+        .scroll-track {{
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            width: 100%;
+        }}
+
+        .scroll-img {{
+            width: 100%;
+            height: 110px;
             object-fit: cover;
             display: block;
-            border: none !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            filter: brightness(0.8);
-            transition: transform 0.2s, filter 0.2s;
         }}
-        .wt-item:hover {{
-            filter: brightness(1.25);
-            transform: scale(1.05);
-            z-index: 5;
-        }}
-        .wt-item.size-2x2 {{ grid-column: span 2; grid-row: span 2; }}
-        .wt-item.size-2x1 {{ grid-column: span 2; grid-row: span 1; }}
-        .wt-item.size-1x2 {{ grid-column: span 1; grid-row: span 2; }}
 
+        /* --- 無限アニメーションキーフレーム --- */
+        @keyframes scrollDown {{
+            0% {{ transform: translateY(-50%); }}
+            100% {{ transform: translateY(0%); }}
+        }}
+
+        @keyframes scrollUp {{
+            0% {{ transform: translateY(0%); }}
+            100% {{ transform: translateY(-50%); }}
+        }}
+
+        /* 移動方向と速度のバリエーション */
+        .col-down .scroll-track {{
+            animation: scrollDown 25s linear infinite;
+        }}
+        .col-up .scroll-track {{
+            animation: scrollUp 25s linear infinite;
+        }}
+
+        .speed-1 .scroll-track {{ animation-duration: 20s; }}
+        .speed-2 .scroll-track {{ animation-duration: 28s; }}
+        .speed-3 .scroll-track {{ animation-duration: 35s; }}
+
+        /* 前面オーバーレイ */
         .wt-overlay {{
             position: absolute;
             top: 0;
@@ -324,13 +373,15 @@ if selected == "ホーム":
             justify-content: center;
             z-index: 10;
             pointer-events: none;
-            background: radial-gradient(circle, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.75) 100%);
+            background: radial-gradient(circle, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.85) 100%);
         }}
+
         .wt-title {{
             text-align: center;
             color: #fff;
-            text-shadow: 0 4px 15px rgba(0,0,0,0.9), 0 0 25px rgba(255, 0, 0, 0.8);
+            text-shadow: 0 4px 20px rgba(0,0,0,0.95), 0 0 25px rgba(255, 0, 0, 0.8);
         }}
+
         .wt-title h1 {{
             font-size: 2.3rem;
             font-weight: 900;
@@ -338,6 +389,7 @@ if selected == "ホーム":
             letter-spacing: 2px;
             color: #ffffff;
         }}
+
         .wt-title p {{
             font-size: 1rem;
             color: #ff3b30;
@@ -347,8 +399,8 @@ if selected == "ホーム":
         </style>
 
         <div class="wt-hero-container">
-            <div class="wt-grid">
-                {html_images}
+            <div class="scroll-wrapper">
+                {cols_html}
             </div>
             <div class="wt-overlay">
                 <div class="wt-title">
