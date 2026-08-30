@@ -47,35 +47,50 @@ def get_clean_str(val):
     return s
 
 
-# 画像表示ヘルパー関数（URL・ローカルパス両対応）
-def display_question_image(q_data, width=300, caption=None, show_caption=False):
-    """画像パスまたはURLを探して表示する関数（show_caption=Falseでファイル名を絶対に非表示）"""
-    img_val = get_clean_str(q_data.get("image") or q_data.get("画像"))
-    if not img_val:
-        st.caption("📷 画像データなし")
-        return False
-
-    # show_captionがTrueの時だけキャプションを設定（Falseなら無条件でNoneにする）
-    if show_caption:
-        cap = caption or f"ファイル: {img_val}"
-    else:
-        cap = None
-
-    if img_val.startswith("http://") or img_val.startswith("https://"):
-        st.image(img_val, width=width, caption=cap)
-        return True
-
-    imgPath = (
-        img_val
-        if os.path.exists(img_val)
-        else os.path.join("images", img_val)
-    )
-    if os.path.exists(imgPath):
-        st.image(imgPath, width=width, caption=cap)
-        return True
+# --- 🖼️ 画像表示・ランダム画像表示関数（改善版） ---
+def display_question_image(row, width=200, show_caption=True):
+    """
+    指定された行データから画像（単一・複数・ランダム）を判定し、
+    上から下へ（縦一列に）常時綺麗に表示する関数
+    """
+    # 1. 表示対象となる画像パス/URLの抽出
+    img_sources = []
     
-    st.caption("⚠️ 画像ファイルが見つかりません")
-    return False
+    # 問題画像、正答画像、通常画像の候補をチェック
+    for col in ["question_image", "image", "answer_image", "画像"]:
+        if col in row and pd.notna(row[col]):
+            val = str(row[col]).strip()
+            if val and val.lower() != "nan":
+                # カンマや改行で複数画像が指定されている場合にも対応
+                for img_item in val.replace("\n", ",").split(","):
+                    cleaned_path = img_item.strip()
+                    if cleaned_path and cleaned_path not in img_sources:
+                        img_sources.append(cleaned_path)
+
+    # 2. 画像が見つからない場合
+    if not img_sources:
+        st.info("📷 画像データなし")
+        return
+
+    # 3. 抽出された画像を上から下へ（縦一列）常時表示
+    for idx, img_path in enumerate(img_sources):
+        try:
+            # キャプション表示の設定
+            cap = None
+            if show_caption:
+                q_text = str(row.get("question") or row.get("name") or "").strip()
+                cap = f"画像 {idx + 1}" if not q_text else f"【画像 {idx + 1}】 {q_text[:20]}"
+
+            # 画像の表示（横幅指定 & 自動フィット）
+            st.image(
+                img_path,
+                caption=cap,
+                width=width,
+                use_column_width=(width is None)
+            )
+        except Exception:
+            # パス切れ等のエラー時も止まらずメッセージ表示
+            st.warning(f"⚠️ 画像の読み込みに失敗しました ({img_path})")
 
 
 # 正解リスト抽出ヘルパー
