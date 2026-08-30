@@ -280,7 +280,7 @@ if selected == "ホーム":
             if not col_imgs:
                 continue
             duplicated_imgs = col_imgs + col_imgs
-            imgs_tags = "".join([f'<img src="{b64}" class="scroll-img" />' for b64 in duplicated_imgs])
+            imgs_tags = "".join([f'<div class="img-box"><img src="{b64}" class="scroll-img" /></div>' for b64 in duplicated_imgs])
             
             col_class = "col-down" if i % 2 == 0 else "col-up"
             speed_class = f"speed-{(i % 3) + 1}"
@@ -313,7 +313,7 @@ if selected == "ホーム":
         .wt-hero-container {{
             position: relative;
             width: 100%;
-            height: 600px; /* 表示領域の大きさを指定 */
+            height: 600px;
             background-color: #000;
             overflow: hidden;
             border-radius: 12px;
@@ -323,8 +323,9 @@ if selected == "ホーム":
             display: flex;
             width: 100%;
             height: 100%;
-            gap: 0px; /* 隙間をなくして全画面密着 */
+            gap: 4px;
             opacity: 0.85;
+            background-color: #000;
         }}
 
         .scroll-column {{
@@ -337,14 +338,25 @@ if selected == "ホーム":
         .scroll-track {{
             display: flex;
             flex-direction: column;
-            gap: 0px;
+            gap: 6px;
             width: 100%;
         }}
 
-        .scroll-img {{
+        .img-box {{
             width: 100%;
-            height: 150px; /* 画像1枚の高さを拡大 */
-            object-fit: cover; /* 枠いっぱいに拡大してトリミング */
+            height: 130px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #111;
+            border-radius: 4px;
+            overflow: hidden;
+        }}
+
+        .scroll-img {{
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain; /* 切り取らずに顔全体をそのまま表示 */
             display: block;
         }}
 
@@ -361,9 +373,9 @@ if selected == "ホーム":
         .col-down .scroll-track {{ animation: scrollDown linear infinite; }}
         .col-up .scroll-track {{ animation: scrollUp linear infinite; }}
 
-        .speed-1 .scroll-track {{ animation-duration: 20s; }}
-        .speed-2 .scroll-track {{ animation-duration: 26s; }}
-        .speed-3 .scroll-track {{ animation-duration: 32s; }}
+        .speed-1 .scroll-track {{ animation-duration: 22s; }}
+        .speed-2 .scroll-track {{ animation-duration: 28s; }}
+        .speed-3 .scroll-track {{ animation-duration: 34s; }}
 
         .wt-overlay {{
             position: absolute;
