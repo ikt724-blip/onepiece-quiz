@@ -216,6 +216,7 @@ menu_options = [
     "🔥 苦手克服",
     "🔍 AI検索モード",
     "➕ データ追加・編集",
+    "🏴‍☠️ キャラクターデータ",
 ]
 
 # --- サイドバーナビゲーション ---
@@ -934,6 +935,13 @@ elif selected == "➕ データ追加・編集":
         label_visibility="collapsed"
     )
 
+    # 補助関数：working_dfに安全に新規行を追加する処理
+    def append_to_working_df(new_item_dict):
+        new_df = pd.DataFrame([new_item_dict])
+        st.session_state["added_data"] = pd.concat([st.session_state["added_data"], new_df], ignore_index=True)
+        if "working_df" in st.session_state and not st.session_state["working_df"].empty:
+            st.session_state["working_df"] = pd.concat([st.session_state["working_df"], new_df], ignore_index=True)
+
     if tab_selection == "➕ 1. データの追加":
         st.subheader("📝 新しいデータの追加")
         
@@ -947,6 +955,7 @@ elif selected == "➕ データ追加・編集":
             "✏️ 自由記述"
         ])
 
+        # --- 👤 キャラデータ ---
         with add_tab_char:
             st.markdown("##### キャラクターマスターの追加")
             with st.form("char_form", clear_on_submit=True):
@@ -964,17 +973,19 @@ elif selected == "➕ データ追加・編集":
                             "type": "キャラデータ",
                             "characterid": c_id,
                             "name": c_name,
+                            "question": c_name,  # 編集画面での互換性維持
                             "image": c_img,
                             "nickname": c_nick,
                             "devil_fruit": c_fruit,
                             "fruit_type": c_ftype,
                             "affiliation": c_aff,
                         }
-                        st.session_state["added_data"] = pd.concat([st.session_state["added_data"], pd.DataFrame([new_item])], ignore_index=True)
+                        append_to_working_df(new_item)
                         st.success(f"「{c_name}」を追加しました！")
                     else:
                         st.error("キャラクター名は必須項目です。")
 
+        # --- 🎯 一問一答 ---
         with add_tab_1to1:
             st.markdown("##### 一問一答クイズの追加")
             with st.form("form_1to1", clear_on_submit=True):
@@ -1006,11 +1017,12 @@ elif selected == "➕ データ追加・編集":
                             "answer": ans_map[correct_opt],
                             "explanation": exp_text
                         }
-                        st.session_state["added_data"] = pd.concat([st.session_state["added_data"], pd.DataFrame([new_item])], ignore_index=True)
+                        append_to_working_df(new_item)
                         st.success("一問一答問題を追加しました！")
                     else:
                         st.error("入力漏れがあります。")
 
+        # --- ☑️ 一問多答 ---
         with add_tab_multi:
             st.markdown("##### 一問多答クイズの追加")
             with st.form("form_multi", clear_on_submit=True):
@@ -1050,9 +1062,10 @@ elif selected == "➕ データ追加・編集":
                             "answer": "、".join(answers),
                             "explanation": exp_text
                         }
-                        st.session_state["added_data"] = pd.concat([st.session_state["added_data"], pd.DataFrame([new_item])], ignore_index=True)
+                        append_to_working_df(new_item)
                         st.success("一問多答問題を追加しました！")
 
+        # --- 🔢 順序選択 ---
         with add_tab_order:
             st.markdown("##### 順序選択クイズの追加")
             with st.form("form_order", clear_on_submit=True):
@@ -1082,9 +1095,10 @@ elif selected == "➕ データ追加・編集":
                             "answer": order_ans,
                             "explanation": exp_text
                         }
-                        st.session_state["added_data"] = pd.concat([st.session_state["added_data"], pd.DataFrame([new_item])], ignore_index=True)
+                        append_to_working_df(new_item)
                         st.success("順序選択問題を追加しました！")
 
+        # --- 🔤 6文字並べ替え ---
         with add_tab_6char:
             st.markdown("##### 6文字並べ替えクイズの追加")
             with st.form("form_6char", clear_on_submit=True):
@@ -1111,9 +1125,10 @@ elif selected == "➕ データ追加・編集":
                             "answer": correct_word,
                             "explanation": exp_text
                         }
-                        st.session_state["added_data"] = pd.concat([st.session_state["added_data"], pd.DataFrame([new_item])], ignore_index=True)
+                        append_to_working_df(new_item)
                         st.success("6文字並べ替え問題を追加しました！")
 
+        # --- 🔗 組み合わせ ---
         with add_tab_pair:
             st.markdown("##### 組み合わせクイズの追加")
             with st.form("form_pair", clear_on_submit=True):
@@ -1144,9 +1159,10 @@ elif selected == "➕ データ追加・編集":
                             "answer": pair_ans,
                             "explanation": exp_text
                         }
-                        st.session_state["added_data"] = pd.concat([st.session_state["added_data"], pd.DataFrame([new_item])], ignore_index=True)
+                        append_to_working_df(new_item)
                         st.success("組み合わせ問題を追加しました！")
 
+        # --- ✏️ 自由記述 ---
         with add_tab_free:
             st.markdown("##### 自由記述クイズの追加")
             with st.form("form_free", clear_on_submit=True):
@@ -1169,7 +1185,7 @@ elif selected == "➕ データ追加・編集":
                             "answer": ans_text,
                             "explanation": exp_text
                         }
-                        st.session_state["added_data"] = pd.concat([st.session_state["added_data"], pd.DataFrame([new_item])], ignore_index=True)
+                        append_to_working_df(new_item)
                         st.success("自由記述問題を追加しました！")
 
     elif tab_selection == "✏️ 2. データの編集・修正":
@@ -1261,7 +1277,7 @@ elif selected == "➕ データ追加・編集":
 
                 with nav_col1:
                     st.write("")
-                    if st.button("◀ 前へ", use_container_width="stretch", disabled=(st.session_state["edit_sub_idx"] <= 0)):
+                    if st.button("◀ 前へ", use_container_width=True, disabled=(st.session_state["edit_sub_idx"] <= 0)):
                         st.session_state["edit_sub_idx"] -= 1
                         st.rerun()
 
@@ -1288,7 +1304,7 @@ elif selected == "➕ データ追加・編集":
 
                 with nav_col3:
                     st.write("")
-                    if st.button("次へ ▶", use_container_width="stretch", disabled=(st.session_state["edit_sub_idx"] >= filtered_count - 1)):
+                    if st.button("次へ ▶", use_container_width=True, disabled=(st.session_state["edit_sub_idx"] >= filtered_count - 1)):
                         st.session_state["edit_sub_idx"] += 1
                         st.rerun()
 
@@ -1326,28 +1342,46 @@ elif selected == "➕ データ追加・編集":
 
                     with col_e2:
                         e_answer = st.text_input("正解（answer）", value=get_clean_str(target_row.get("answer")))
-                        e_opt1 = st.text_input("選択肢 1 / 左1", value=get_clean_str(target_row.get("option1") or target_row.get("left1")))
-                        e_opt2 = st.text_input("選択肢 2 / 右1", value=get_clean_str(target_row.get("option2") or target_row.get("right1")))
-                        e_opt3 = st.text_input("選択肢 3 / 左2", value=get_clean_str(target_row.get("option3") or target_row.get("left2")))
-                        e_opt4 = st.text_input("選択肢 4 / 右2", value=get_clean_str(target_row.get("option4") or target_row.get("right2")))
+                        
+                        # タイプに応じたラベル表示
+                        if curr_type == "組み合わせ":
+                            lbl1, lbl2, lbl3, lbl4 = "左1 (left1)", "右1 (right1)", "左2 (left2)", "右2 (right2)"
+                        else:
+                            lbl1, lbl2, lbl3, lbl4 = "選択肢 1", "選択肢 2", "選択肢 3", "選択肢 4"
+
+                        e_opt1 = st.text_input(lbl1, value=get_clean_str(target_row.get("option1") or target_row.get("left1")))
+                        e_opt2 = st.text_input(lbl2, value=get_clean_str(target_row.get("option2") or target_row.get("right1")))
+                        e_opt3 = st.text_input(lbl3, value=get_clean_str(target_row.get("option3") or target_row.get("left2")))
+                        e_opt4 = st.text_input(lbl4, value=get_clean_str(target_row.get("option4") or target_row.get("right2")))
                         e_exp = st.text_area("解説（explanation）", value=get_clean_str(target_row.get("explanation")), height=100)
 
-                    submit_edit = st.form_submit_button("💾 修正内容を更新する", use_container_width="stretch")
+                    submit_edit = st.form_submit_button("💾 修正内容を更新する", use_container_width=True)
 
                     if submit_edit:
-                        st.session_state["working_df"].at[selected_idx, "type"] = e_type
-                        if "question" in current_df.columns or e_question:
-                            st.session_state["working_df"].at[selected_idx, "question"] = e_question
-                        st.session_state["working_df"].at[selected_idx, "question_image"] = e_q_img
-                        st.session_state["working_df"].at[selected_idx, "answer_image"] = e_a_img
-                        st.session_state["working_df"].at[selected_idx, "image"] = e_q_img or e_a_img
-                        st.session_state["working_df"].at[selected_idx, "answer"] = e_answer
-                        st.session_state["working_df"].at[selected_idx, "explanation"] = e_exp
+                        # 安全に列を割り当てる内部関数
+                        def safe_assign(col_name, val):
+                            if col_name not in st.session_state["working_df"].columns:
+                                st.session_state["working_df"][col_name] = None
+                            st.session_state["working_df"].at[selected_idx, col_name] = val
 
-                        if "option1" in current_df.columns: st.session_state["working_df"].at[selected_idx, "option1"] = e_opt1
-                        if "option2" in current_df.columns: st.session_state["working_df"].at[selected_idx, "option2"] = e_opt2
-                        if "option3" in current_df.columns: st.session_state["working_df"].at[selected_idx, "option3"] = e_opt3
-                        if "option4" in current_df.columns: st.session_state["working_df"].at[selected_idx, "option4"] = e_opt4
+                        safe_assign("type", e_type)
+                        safe_assign("question", e_question)
+                        safe_assign("question_image", e_q_img)
+                        safe_assign("answer_image", e_a_img)
+                        safe_assign("image", e_q_img or e_a_img)
+                        safe_assign("answer", e_answer)
+                        safe_assign("explanation", e_exp)
+
+                        if e_type == "組み合わせ":
+                            safe_assign("left1", e_opt1)
+                            safe_assign("right1", e_opt2)
+                            safe_assign("left2", e_opt3)
+                            safe_assign("right2", e_opt4)
+                        else:
+                            safe_assign("option1", e_opt1)
+                            safe_assign("option2", e_opt2)
+                            safe_assign("option3", e_opt3)
+                            safe_assign("option4", e_opt4)
 
                         st.success(f"✅ 全体ID `{selected_idx + 1}` の修正を保存しました！")
                         st.rerun()
@@ -1366,11 +1400,11 @@ elif selected == "➕ データ追加・編集":
                     data=buffer_all.getvalue(),
                     file_name="quiz_data_updated.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width="stretch"
+                    use_container_width=True
                 )
 
             with exp_col2:
-                if st.button("🔄 修正を破棄して初期データに戻す", use_container_width="stretch"):
+                if st.button("🔄 修正を破棄して初期データに戻す", use_container_width=True):
                     st.session_state["working_df"] = pd.DataFrame()
                     st.session_state["added_data"] = pd.DataFrame()
                     st.session_state["edit_sub_idx"] = 0
