@@ -51,12 +51,11 @@ def get_clean_str(val):
 def display_question_image(row, width=200, show_caption=True):
     """
     指定された行データから画像パスを抽出し、
-    日本語ファイル名（王直.png等）でもエラーが出ないよう安全に画像を表示する関数
+    日本語ファイル名でもエラーが出ないよう安全に画像を表示する関数
     """
     img_sources = []
     IMAGE_DIRS = ["images", "img", "static/images", "assets", "data/images", "."]
 
-    # 1. 問題画像、正答画像、通常画像の候補をチェック
     for col in ["question_image", "image", "answer_image", "画像"]:
         if col in row and pd.notna(row[col]):
             val = str(row[col]).strip()
@@ -66,12 +65,10 @@ def display_question_image(row, width=200, show_caption=True):
                     if cleaned_path and cleaned_path not in img_sources:
                         img_sources.append(cleaned_path)
 
-    # 2. 画像が見つからない場合
     if not img_sources:
         st.info("📷 画像データなし")
         return
 
-    # 3. 画像の存在チェック & フォルダ補正をして表示
     for idx, raw_path in enumerate(img_sources):
         resolved_path = None
 
@@ -101,11 +98,9 @@ def display_question_image(row, width=200, show_caption=True):
 
         if resolved_path:
             try:
-                # Web上のURLの場合
                 if resolved_path.startswith("http"):
                     st.image(resolved_path, caption=cap, width=width)
                 else:
-                    # ローカルファイルの場合（日本語ファイル名対策としてPILで安全に開く）
                     with Image.open(resolved_path) as img:
                         img_bytes = img.copy()
                         if width:
@@ -128,7 +123,6 @@ def display_question_image(row, width=200, show_caption=True):
 
 # 正解リスト抽出ヘルパー
 def get_correct_answers_list(q, correct_ans_str):
-    """問題データから正解の要素リストを取得する"""
     answers = []
     for i in range(1, 10):
         val = get_clean_str(q.get(f"answer_{i}"))
@@ -148,9 +142,8 @@ def get_correct_answers_list(q, correct_ans_str):
     return answers
 
 
-# 正解判定共通ロジック (順不同対応)
+# 正解判定共通ロジック
 def check_answers_multi(user_inputs, correct_answers):
-    """複数入力された回答と正解リストを順不同で照合"""
     user_clean = [str(u).strip() for u in user_inputs if str(u).strip()]
     correct_clean = [
         str(c).strip() for c in correct_answers if str(c).strip()
@@ -222,7 +215,6 @@ st.set_page_config(
     layout="wide",
 )
 
-# 画面切り替え用の状態初期化
 if "current_nav" not in st.session_state:
     st.session_state["current_nav"] = "ホーム"
 
@@ -274,11 +266,19 @@ if selected == "ホーム":
         + glob.glob("*.jpg")
     )
 
+    # アプリ起動・更新ごとに全キャラクターの画像順をランダム化してセッションに保持
+    if "shuffled_bg_images" not in st.session_state:
+        shuffled = all_imgs.copy()
+        random.shuffle(shuffled)
+        st.session_state["shuffled_bg_images"] = shuffled
+
+    current_bg_imgs = st.session_state["shuffled_bg_images"]
+
     grid_imgs_html = ""
-    if all_imgs:
-        # モザイクを隙間なく埋めるため80枚に拡張
-        sample_imgs = [random.choice(all_imgs) for _ in range(80)]
-        for img_path in sample_imgs:
+    if current_bg_imgs:
+        # 画面更新時のランダム順を元に、途切れなく上から下へ流すため2周分配置
+        full_loop_imgs = current_bg_imgs + current_bg_imgs
+        for img_path in full_loop_imgs:
             try:
                 with Image.open(img_path) as img:
                     buffered = io.BytesIO()
@@ -311,24 +311,25 @@ if selected == "ホーム":
     
     .mosaic-bg {{
         position: absolute;
-        top: -20%;
-        left: -5%;
-        width: 110%;
-        height: 140%;
+        top: 0;
+        left: 0;
+        width: 100%;
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
         grid-auto-rows: 80px;
-        gap: 4px;
+        gap: 6px;
+        padding: 6px;
         opacity: 0.85;
-        animation: scroll-down 12s linear infinite;
+        /* 全キャラが上から下へ流れるアニメーション */
+        animation: stream-down 25s linear infinite;
     }}
 
-    @keyframes scroll-down {{
+    @keyframes stream-down {{
         0% {{
-            transform: translateY(0);
+            transform: translateY(-50%);
         }}
         100% {{
-            transform: translateY(-80px);
+            transform: translateY(0%);
         }}
     }}
     
@@ -336,13 +337,13 @@ if selected == "ホーム":
         width: 100%;
         height: 100%;
         object-fit: cover;
-        border-radius: 4px;
+        border-radius: 6px;
     }}
 
     .center-overlay {{
         position: relative;
         z-index: 2;
-        background: rgba(0, 0, 0, 0.65);
+        background: rgba(0, 0, 0, 0.70);
         backdrop-filter: blur(4px);
         padding: 35px 50px;
         border-radius: 16px;
@@ -373,7 +374,7 @@ if selected == "ホーム":
 
     <div class="wt100-container">
         <div class="mosaic-bg">
-            {grid_imgs_html if grid_imgs_html else '<div style="grid-column: 1/-1; text-align:center; color:#888; padding-top:180px;">（画像を追加すると背景にモザイク表示されます）</div>'}
+            {grid_imgs_html if grid_imgs_html else '<div style="grid-column: 1/-1; text-align:center; color:#888; padding-top:180px;">（画像を追加すると背景に全キャラが流れます）</div>'}
         </div>
         <div class="center-overlay">
             <h1>🏴‍☠️ ONE PIECE ナレッジキング対策</h1>
@@ -384,6 +385,12 @@ if selected == "ホーム":
 
     st.markdown(banner_html, unsafe_allow_html=True)
     st.write("")
+
+    if st.button("🔀 背景画像のランダム並び順をシャッフル"):
+        shuffled = all_imgs.copy()
+        random.shuffle(shuffled)
+        st.session_state["shuffled_bg_images"] = shuffled
+        st.rerun()
 
     if df_all.empty:
         st.warning(
@@ -778,7 +785,7 @@ elif selected == "🔥 苦手克服":
     st.subheader("🔥 苦手克服モード")
     st.info("間違えた問題やチェックした問題を重点的に復習できます。")
 
-# --- 5. AI検索モード（図鑑＋選択画像表示機能） ---
+# --- 5. AI検索モード ---
 elif selected == "🔍 AI検索モード":
     st.title("🔍 AI検索モード")
     st.caption(
@@ -972,9 +979,6 @@ elif selected == "➕ データ追加・編集":
         label_visibility="collapsed",
     )
 
-    # ----------------------------------------------------
-    # 【1. データの追加】
-    # ----------------------------------------------------
     if tab_selection == "➕ 1. データの追加":
         st.subheader("📝 新しいデータの追加")
 
@@ -1337,9 +1341,6 @@ elif selected == "➕ データ追加・編集":
                         )
                         st.success("自由記述問題を追加しました！")
 
-    # ----------------------------------------------------
-    # 【2. データの編集・修正】
-    # ----------------------------------------------------
     elif tab_selection == "✏️ 2. データの編集・修正":
         st.subheader("🛠️ かんたん問題修正フォーム")
 
