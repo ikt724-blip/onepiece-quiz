@@ -47,16 +47,29 @@ def get_clean_str(val):
     return s
 
 
-# --- 🖼️ 画像表示・フォルダ自動探索関数（日本語ファイル名完全対応版） ---
+# 画像をBase64に変換（カスタムHTML/CSSアニメーション用）
+def image_to_base64(img_path):
+    try:
+        with Image.open(img_path) as img:
+            buffered = io.BytesIO()
+            img_format = img.format if img.format else "PNG"
+            img.save(buffered, format=img_format)
+            img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
+            mime_type = f"image/{img_format.lower()}"
+            return f"data:{mime_type};base64,{img_str}"
+    except Exception:
+        return None
+
+
+# --- 🖼️ 画像表示・フォルダ自動探索関数 ---
 def display_question_image(row, width=200, show_caption=True):
     """
     指定された行データから画像パスを抽出し、
-    日本語ファイル名（王直.png等）でもエラーが出ないよう安全に画像を表示する関数
+    日本語ファイル名でもエラーが出ないよう安全に画像を表示する関数
     """
     img_sources = []
     IMAGE_DIRS = ["images", "img", "static/images", "assets", "data/images", "."]
     
-    # 1. 問題画像、正答画像、通常画像の候補をチェック
     for col in ["question_image", "image", "answer_image", "画像"]:
         if col in row and pd.notna(row[col]):
             val = str(row[col]).strip()
@@ -66,12 +79,10 @@ def display_question_image(row, width=200, show_caption=True):
                     if cleaned_path and cleaned_path not in img_sources:
                         img_sources.append(cleaned_path)
 
-    # 2. 画像が見つからない場合
     if not img_sources:
         st.info("📷 画像データなし")
         return
 
-    # 3. 画像の存在チェック & フォルダ補正をして表示
     for idx, raw_path in enumerate(img_sources):
         resolved_path = None
 
@@ -95,11 +106,9 @@ def display_question_image(row, width=200, show_caption=True):
 
         if resolved_path:
             try:
-                # Web上のURLの場合
                 if resolved_path.startswith("http"):
                     st.image(resolved_path, caption=cap, width=width)
                 else:
-                    # ローカルファイルの場合（日本語ファイル名対策としてPILで安全に開く）
                     with Image.open(resolved_path) as img:
                         img_bytes = img.copy()
                         if width is None:
@@ -132,7 +141,7 @@ def get_correct_answers_list(q, correct_ans_str):
     return answers
 
 
-# 正解判定共通ロジック (順不同対応)
+# 正解判定共通ロジック
 def check_answers_multi(user_inputs, correct_answers):
     """複数入力された回答と正解リストを順不同で照合"""
     user_clean = [str(u).strip() for u in user_inputs if str(u).strip()]
@@ -238,7 +247,7 @@ with st.sidebar:
 # 全データ取得
 df_all = load_all_data()
 
-# --- 1. ホーム画面 (クラッシュ防止・軽量表示化) ---
+# --- 1. ホーム画面 ---
 if selected == "ホーム":
     st.title("🏴‍☠️ ONE PIECE ナレッジキング対策")
     st.caption("― 最強のデータベースを脳に刻め ―")
@@ -254,18 +263,56 @@ if selected == "ホーム":
 
     if all_imgs:
         st.subheader("🖼️ キャラクターギャラリー")
-        # 描画負荷軽減のため15枚に制限
+        
+        # 上から下へ流れ落ちるアニメーションCSSの定義
+        st.markdown(
+            """
+            <style>
+            @keyframes dropDown {
+                0% {
+                    opacity: 0;
+                    transform: translateY(-50px);
+                }
+                100% {
+                    opacity: 1;
+                    transform: translateY(0);
+                }
+            }
+            .animated-img {
+                width: 130px;
+                height: auto;
+                border-radius: 8px;
+                box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+                animation: dropDown 0.6s ease-out forwards;
+                opacity: 0;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True
+        )
+
+        # 15枚全データからランダム抽出
         sample_imgs = random.sample(all_imgs, min(len(all_imgs), 15))
+        
+        # 5列に配置
         cols = st.columns(5)
         for idx, img_path in enumerate(sample_imgs):
             if os.path.exists(img_path):
-                with cols[idx % 5]:
-                    try:
-                        st.image(img_path, use_container_width="stretch")
-                    except Exception:
-                        pass
+                col = cols[idx % 5]
+                b64_str = image_to_base64(img_path)
+                if b64_str:
+                    # 次々に時間差（0.1秒刻み）で落下表示
+                    delay = round(idx * 0.1, 2)
+                    img_html = f"""
+                    <div style="text-align: center; margin-bottom: 15px;">
+                        <img src="{b64_str}" class="animated-img" style="animation-delay: {delay}s;" />
+                    </div>
+                    """
+                    with col:
+                        st.markdown(img_html, unsafe_allow_html=True)
+
         st.write("")
-        if st.button("🔀 画像をシャッフル"):
+        if st.button("🔀 画像をシャッフル（再アニメーション）"):
             st.rerun()
         st.divider()
 
@@ -275,9 +322,7 @@ if selected == "ホーム":
         )
     else:
         st.success(f"✅ データベース接続完了: 合計 {len(df_all)} 件の問題データが登録されています。")
-        st.info(
-            "👈 左側のメニューから機能を選択してください。"
-        )
+        st.info("👈 左側のメニューから機能を選択してください。")
 
 # --- 2. 練習モード ---
 elif selected == "📖 練習モード":
@@ -467,7 +512,7 @@ elif selected == "📖 練習モード":
                     st.session_state.practice_started = False
                     st.rerun()
 
-# --- 3. 本番模試（50問 / 60分制限） ---
+# --- 3. 本番模試 ---
 elif selected == "🏆 本番模試（50問/60分）":
     st.subheader("🏆 ナレッジキング模擬試験（50問 / 制限時間60分）")
 
@@ -635,7 +680,7 @@ elif selected == "🔥 苦手克服":
     st.subheader("🔥 苦手克服モード")
     st.info("間違えた問題やチェックした問題を重点的に復習できます。")
 
-# --- 5. AI検索モード（図鑑＋選択画像表示機能） ---
+# --- 5. AI検索モード ---
 elif selected == "🔍 AI検索モード":
     st.title("🔍 AI検索モード")
     st.caption("〜 キャラクターマスタ＆問題データベース 爆速逆引き図鑑 〜")
@@ -767,9 +812,6 @@ elif selected == "➕ データ追加・編集":
         label_visibility="collapsed"
     )
 
-    # ----------------------------------------------------
-    # 【1. データの追加】
-    # ----------------------------------------------------
     if tab_selection == "➕ 1. データの追加":
         st.subheader("📝 新しいデータの追加")
         
@@ -1008,9 +1050,6 @@ elif selected == "➕ データ追加・編集":
                         st.session_state["added_data"] = pd.concat([st.session_state["added_data"], pd.DataFrame([new_item])], ignore_index=True)
                         st.success("自由記述問題を追加しました！")
 
-    # ----------------------------------------------------
-    # 【2. データの編集・修正】
-    # ----------------------------------------------------
     elif tab_selection == "✏️ 2. データの編集・修正":
         st.subheader("🛠️ かんたん問題修正フォーム")
 
