@@ -1072,8 +1072,8 @@ elif selected == "➕ データ追加・編集":
                         st.session_state["added_data"] = pd.concat([st.session_state["added_data"], pd.DataFrame([new_item])], ignore_index=True)
                         st.success("自由記述問題を追加しました！")
 
-    # ----------------------------------------------------
-    # 【2. データの編集・修正（簡単入力フォーム形式）】
+   # ----------------------------------------------------
+    # 【2. データの編集・修正（ストーリー絞り込み ＆ 動作安定版）】
     # ----------------------------------------------------
     elif tab_selection == "✏️ 2. データの編集・修正":
         st.subheader("🛠️ かんたん問題修正フォーム")
@@ -1088,110 +1088,160 @@ elif selected == "➕ データ追加・編集":
         if current_df.empty:
             st.info("編集対象のデータがありません。")
         else:
-            total_count = len(current_df)
+            # --- 🔍 絞り込みフィルター（ストーリー・出題タイプ） ---
+            st.markdown("##### 🔍 表示する問題を絞り込む")
+            f_col1, f_col2, f_col3 = st.columns([2, 2, 3])
 
-            # 選択中のインデックス管理
-            if "edit_current_idx" not in st.session_state:
-                st.session_state["edit_current_idx"] = 0
+            # ストーリー（編）一覧の抽出
+            story_col_name = None
+            for c in ["story", "編", "章", "category", "カテゴリ"]:
+                if c in current_df.columns:
+                    story_col_name = c
+                    break
 
-            # 範囲外チェック
-            if st.session_state["edit_current_idx"] >= total_count:
-                st.session_state["edit_current_idx"] = 0
+            story_options = ["すべて"]
+            if story_col_name:
+                valid_stories = current_df[story_col_name].dropna().astype(str).unique().tolist()
+                story_options.extend([s for s in valid_stories if s and s != "nan"])
 
-            default_kw = st.session_state.get("edit_search_keyword", "")
-            if default_kw:
-                st.info(f"🔍 AI検索モードからの連携キーワード: **「{default_kw}」**")
+            with f_col1:
+                selected_story = st.selectbox("ストーリー（編）", options=story_options, key="filter_story")
 
-            # --- ナビゲーションコントロール（前へ / プルダウン / 次へ） ---
-            nav_col1, nav_col2, nav_col3 = st.columns([1, 4, 1])
+            # 出題タイプ一覧の抽出
+            type_options = ["すべて"]
+            if "type" in current_df.columns:
+                valid_types = current_df["type"].dropna().astype(str).unique().tolist()
+                type_options.extend([t for t in valid_types if t and t != "nan"])
 
-            with nav_col1:
-                st.write("") # 高さ調整
-                if st.button("◀ 前へ", use_container_width=True, disabled=(st.session_state["edit_current_idx"] <= 0)):
-                    st.session_state["edit_current_idx"] -= 1
-                    st.rerun()
+            with f_col2:
+                selected_type = st.selectbox("出題形式", options=type_options, key="filter_type")
 
-            with nav_col2:
-                # 問題選択用のリスト作成
+            with f_col3:
+                keyword = st.text_input("キーワード検索（問題文・解説等）", placeholder="例：ルフィ、アラバスタ")
+
+            # フィルタリング適用
+            filtered_df = current_df.copy()
+            if selected_story != "すべて" and story_col_name:
+                filtered_df = filtered_df[filtered_df[story_col_name].astype(str) == selected_story]
+            if selected_type != "すべて" and "type" in filtered_df.columns:
+                filtered_df = filtered_df[filtered_df["type"].astype(str) == selected_type]
+            if keyword:
+                mask = filtered_df.astype(str).apply(lambda x: x.str.contains(keyword, case=False, na=False)).any(axis=1)
+                filtered_df = filtered_df[mask]
+
+            filtered_df = filtered_df.reset_index(drop=False) # 元のインデックス（'index'列）を保持
+
+            filtered_count = len(filtered_df)
+
+            if filtered_count == 0:
+                st.warning("条件に一致する問題が見つかりませんでした。フィルターを変更してください。")
+            else:
+                # セッション位置の保持
+                if "edit_sub_idx" not in st.session_state:
+                    st.session_state["edit_sub_idx"] = 0
+
+                # 範囲外ガード
+                if st.session_state["edit_sub_idx"] >= filtered_count:
+                    st.session_state["edit_sub_idx"] = 0
+
+                st.write("---")
+
+                # --- ◀ 前へ / プルダウン / 次へ ▶ ナビゲーション ---
+                nav_col1, nav_col2, nav_col3 = st.columns([1, 4, 1])
+
+                with nav_col1:
+                    st.write("") # 高さ調整
+                    if st.button("◀ 前へ", use_container_width=True, disabled=(st.session_state["edit_sub_idx"] <= 0)):
+                        st.session_state["edit_sub_idx"] -= 1
+                        st.session_state["edit_select_key"] = st.session_state["edit_sub_idx"]
+                        st.rerun()
+
+                # 選択肢ラベルの構築
                 options_list = []
-                for idx, row in current_df.iterrows():
-                    q_type = get_clean_str(row.get("type")) or "未設定"
-                    q_txt = get_clean_str(row.get("question") or row.get("name") or row.get("名前")) or "無題"
-                    label = f"[{idx + 1}/{total_count}] 【{q_type}】 {q_txt[:28]}"
-                    options_list.append((idx, label))
+                for sub_i, r in filtered_df.iterrows():
+                    orig_i = r["index"]
+                    q_type = get_clean_str(r.get("type")) or "未設定"
+                    q_txt = get_clean_str(r.get("question") or r.get("name") or r.get("名前")) or "無題"
+                    label = f"[{sub_i + 1}/{filtered_count}] (全{orig_i + 1}件目) 【{q_type}】 {q_txt[:25]}"
+                    options_list.append((sub_i, label))
 
-                selected_idx = st.selectbox(
-                    "問題を選択",
-                    options=[opt[0] for opt in options_list],
-                    format_func=lambda x: options_list[x][1],
-                    index=st.session_state["edit_current_idx"],
-                    key="select_problem_to_edit"
-                )
+                with nav_col2:
+                    # 初期キーの設定
+                    if "edit_select_key" not in st.session_state:
+                        st.session_state["edit_select_key"] = st.session_state["edit_sub_idx"]
 
-                # プルダウンで直接変更された場合、インデックスを更新
-                if selected_idx != st.session_state["edit_current_idx"]:
-                    st.session_state["edit_current_idx"] = selected_idx
-                    st.rerun()
+                    def on_selectbox_change():
+                        st.session_state["edit_sub_idx"] = st.session_state["edit_select_key"]
 
-            with nav_col3:
-                st.write("") # 高さ調整
-                if st.button("次へ ▶", use_container_width=True, disabled=(st.session_state["edit_current_idx"] >= total_count - 1)):
-                    st.session_state["edit_current_idx"] += 1
-                    st.rerun()
+                    st.selectbox(
+                        "問題を選択",
+                        options=[opt[0] for opt in options_list],
+                        format_func=lambda x: options_list[x][1],
+                        key="edit_select_key",
+                        on_change=on_selectbox_change
+                    )
 
-            selected_idx = st.session_state["edit_current_idx"]
-            target_row = current_df.iloc[selected_idx]
+                with nav_col3:
+                    st.write("") # 高さ調整
+                    if st.button("次へ ▶", use_container_width=True, disabled=(st.session_state["edit_sub_idx"] >= filtered_count - 1)):
+                        st.session_state["edit_sub_idx"] += 1
+                        st.session_state["edit_select_key"] = st.session_state["edit_sub_idx"]
+                        st.rerun()
 
-            st.write("---")
-            st.markdown(f"##### ✏️ 問題 `{selected_idx + 1} / {total_count}` の修正フォーム")
+                current_sub_idx = st.session_state["edit_sub_idx"]
+                target_sub_row = filtered_df.iloc[current_sub_idx]
+                selected_idx = target_sub_row["index"] # 元の全体データフレームでの行番号
+                target_row = current_df.iloc[selected_idx]
 
-            # プレビューエリア
-            prev_col1, prev_col2 = st.columns(2)
-            with prev_col1:
-                st.caption("🖼️ 現在の問題画像")
-                display_question_image(target_row, width=200, show_caption=False)
-            with prev_col2:
-                q_val, a_val = format_question_and_answer(target_row)
-                st.caption("📝 現在の問題・解答")
-                st.write(f"**問題:** {q_val or '（なし）'}")
-                st.write(f"**正解:** {a_val or '（なし）'}")
+                st.markdown(f"##### ✏️ 絞り込み問題 `{current_sub_idx + 1} / {filtered_count}` （全体データID: `{selected_idx + 1}`）の修正")
 
-            # 修正フォーム
-            with st.form(f"quick_edit_form_{selected_idx}"):
-                col_e1, col_e2 = st.columns(2)
-                with col_e1:
-                    e_type = st.text_input("出題種別 / タイプ", value=get_clean_str(target_row.get("type")))
-                    e_question = st.text_area("問題文 / 名前", value=get_clean_str(target_row.get("question") or target_row.get("name")), height=100)
-                    e_q_img = st.text_input("問題画像（question_image）", value=get_clean_str(target_row.get("question_image") or target_row.get("image")))
-                    e_a_img = st.text_input("正答・解説画像（answer_image）", value=get_clean_str(target_row.get("answer_image")))
+                # プレビュー表示
+                prev_col1, prev_col2 = st.columns(2)
+                with prev_col1:
+                    st.caption("🖼️ 現在の問題画像")
+                    display_question_image(target_row, width=200, show_caption=False)
+                with prev_col2:
+                    q_val, a_val = format_question_and_answer(target_row)
+                    st.caption("📝 現在の問題・解答")
+                    st.write(f"**問題:** {q_val or '（なし）'}")
+                    st.write(f"**正解:** {a_val or '（なし）'}")
 
-                with col_e2:
-                    e_answer = st.text_input("正解（answer）", value=get_clean_str(target_row.get("answer")))
-                    e_opt1 = st.text_input("選択肢 1 / 左1", value=get_clean_str(target_row.get("option1") or target_row.get("left1")))
-                    e_opt2 = st.text_input("選択肢 2 / 右1", value=get_clean_str(target_row.get("option2") or target_row.get("right1")))
-                    e_opt3 = st.text_input("選択肢 3 / 左2", value=get_clean_str(target_row.get("option3") or target_row.get("left2")))
-                    e_opt4 = st.text_input("選択肢 4 / 右2", value=get_clean_str(target_row.get("option4") or target_row.get("right2")))
-                    e_exp = st.text_area("解説（explanation）", value=get_clean_str(target_row.get("explanation")), height=100)
+                # 修正入力フォーム
+                with st.form(f"quick_edit_form_{selected_idx}"):
+                    col_e1, col_e2 = st.columns(2)
+                    with col_e1:
+                        e_type = st.text_input("出題種別 / タイプ", value=get_clean_str(target_row.get("type")))
+                        e_question = st.text_area("問題文 / 名前", value=get_clean_str(target_row.get("question") or target_row.get("name")), height=100)
+                        e_q_img = st.text_input("問題画像（question_image）", value=get_clean_str(target_row.get("question_image") or target_row.get("image")))
+                        e_a_img = st.text_input("正答・解説画像（answer_image）", value=get_clean_str(target_row.get("answer_image")))
 
-                submit_edit = st.form_submit_button("💾 修正内容を更新する", use_container_width=True)
+                    with col_e2:
+                        e_answer = st.text_input("正解（answer）", value=get_clean_str(target_row.get("answer")))
+                        e_opt1 = st.text_input("選択肢 1 / 左1", value=get_clean_str(target_row.get("option1") or target_row.get("left1")))
+                        e_opt2 = st.text_input("選択肢 2 / 右1", value=get_clean_str(target_row.get("option2") or target_row.get("right1")))
+                        e_opt3 = st.text_input("選択肢 3 / 左2", value=get_clean_str(target_row.get("option3") or target_row.get("left2")))
+                        e_opt4 = st.text_input("選択肢 4 / 右2", value=get_clean_str(target_row.get("option4") or target_row.get("right2")))
+                        e_exp = st.text_area("解説（explanation）", value=get_clean_str(target_row.get("explanation")), height=100)
 
-                if submit_edit:
-                    st.session_state["working_df"].at[selected_idx, "type"] = e_type
-                    if "question" in current_df.columns or e_question:
-                        st.session_state["working_df"].at[selected_idx, "question"] = e_question
-                    st.session_state["working_df"].at[selected_idx, "question_image"] = e_q_img
-                    st.session_state["working_df"].at[selected_idx, "answer_image"] = e_a_img
-                    st.session_state["working_df"].at[selected_idx, "image"] = e_q_img or e_a_img
-                    st.session_state["working_df"].at[selected_idx, "answer"] = e_answer
-                    st.session_state["working_df"].at[selected_idx, "explanation"] = e_exp
-                    
-                    if "option1" in current_df.columns: st.session_state["working_df"].at[selected_idx, "option1"] = e_opt1
-                    if "option2" in current_df.columns: st.session_state["working_df"].at[selected_idx, "option2"] = e_opt2
-                    if "option3" in current_df.columns: st.session_state["working_df"].at[selected_idx, "option3"] = e_opt3
-                    if "option4" in current_df.columns: st.session_state["working_df"].at[selected_idx, "option4"] = e_opt4
+                    submit_edit = st.form_submit_button("💾 修正内容を更新する", use_container_width=True)
 
-                    st.success(f"✅ 問題 {selected_idx + 1} の修正を保存しました！")
-                    st.rerun()
+                    if submit_edit:
+                        st.session_state["working_df"].at[selected_idx, "type"] = e_type
+                        if "question" in current_df.columns or e_question:
+                            st.session_state["working_df"].at[selected_idx, "question"] = e_question
+                        st.session_state["working_df"].at[selected_idx, "question_image"] = e_q_img
+                        st.session_state["working_df"].at[selected_idx, "answer_image"] = e_a_img
+                        st.session_state["working_df"].at[selected_idx, "image"] = e_q_img or e_a_img
+                        st.session_state["working_df"].at[selected_idx, "answer"] = e_answer
+                        st.session_state["working_df"].at[selected_idx, "explanation"] = e_exp
+                        
+                        if "option1" in current_df.columns: st.session_state["working_df"].at[selected_idx, "option1"] = e_opt1
+                        if "option2" in current_df.columns: st.session_state["working_df"].at[selected_idx, "option2"] = e_opt2
+                        if "option3" in current_df.columns: st.session_state["working_df"].at[selected_idx, "option3"] = e_opt3
+                        if "option4" in current_df.columns: st.session_state["working_df"].at[selected_idx, "option4"] = e_opt4
+
+                        st.success(f"✅ 全体ID `{selected_idx + 1}` の修正を保存しました！")
+                        st.rerun()
 
             st.write("---")
             st.markdown("##### 📥 修正済みデータの書き出し")
@@ -1214,5 +1264,6 @@ elif selected == "➕ データ追加・編集":
                 if st.button("🔄 修正を破棄して初期データに戻す", use_container_width=True):
                     st.session_state["working_df"] = pd.DataFrame()
                     st.session_state["added_data"] = pd.DataFrame()
-                    st.session_state["edit_current_idx"] = 0
+                    st.session_state["edit_sub_idx"] = 0
+                    st.session_state["edit_select_key"] = 0
                     st.rerun()
