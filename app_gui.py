@@ -263,6 +263,7 @@ if selected == "ホーム":
     wt100_full_html = ""
 
     if all_imgs:
+        # 画面読み込みごとに自動で画像をランダム抽出（シャッフル）
         sample_imgs = random.sample(all_imgs, min(len(all_imgs), 60))
         
         NUM_COLS = 6
@@ -357,7 +358,7 @@ if selected == "ホーム":
         .scroll-img {{
             max-width: 100%;
             max-height: 100%;
-            object-fit: contain; /* 切り取らずに顔全体をそのまま表示 */
+            object-fit: contain;
             display: block;
         }}
 
@@ -436,17 +437,7 @@ if selected == "ホーム":
     else:
         st.warning("表示できる画像ファイル（.png / .jpg）が見つかりません。")
 
-    if st.button("🔀 画像をシャッフル（再アニメーション）"):
-        st.rerun()
     st.divider()
-
-    if df_all.empty:
-        st.warning(
-            "現在、読み込めるExcelデータ（.xlsx）がありません。リポジトリにExcelファイルを配置してください。"
-        )
-    else:
-        st.success(f"✅ データベース接続完了: 合計 {len(df_all)} 件の問題データが登録されています。")
-        st.info("👈 左側のメニューから機能を選択してください。")
 # --- 2. 練習モード ---
 elif selected == "📖 練習モード":
     st.subheader("📖 練習モード")
