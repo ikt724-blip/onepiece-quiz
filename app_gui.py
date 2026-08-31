@@ -245,8 +245,12 @@ with st.sidebar:
     )
     st.session_state["current_nav"] = selected
 
+# 全データ取得
+df_all = load_all_data()
+
 # --- 1. ホーム画面 ---
 if selected == "ホーム":
+    import streamlit.components.v1 as components
 
     all_imgs = (
         glob.glob("images/*.png")
@@ -432,6 +436,8 @@ if selected == "ホーム":
     else:
         st.warning("表示できる画像ファイル（.png / .jpg）が見つかりません。")
 
+    if st.button("🔀 画像をシャッフル（再アニメーション）"):
+        st.rerun()
     st.divider()
 
     if df_all.empty:
@@ -441,11 +447,6 @@ if selected == "ホーム":
     else:
         st.success(f"✅ データベース接続完了: 合計 {len(df_all)} 件の問題データが登録されています。")
         st.info("👈 左側のメニューから機能を選択してください。")
-
-    # --- 定期更新処理 ---
-    # 指定秒数（例: 15秒）待機後、ホーム画面を自動リロードして背景画像を切り替える
-    time.sleep(15)
-    st.rerun()
 # --- 2. 練習モード ---
 elif selected == "📖 練習モード":
     st.subheader("📖 練習モード")
