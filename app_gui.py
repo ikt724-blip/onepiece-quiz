@@ -521,24 +521,25 @@ elif selected == "📖 練習モード":
                 q = st.session_state.p_quiz_list[curr_idx]
                 st.progress((curr_idx) / total_q)
 
+                question_text, correct_ans_raw = format_question_and_answer(q)
+
                 c_top1, c_top2 = st.columns([3, 1])
                 with c_top1:
                     st.markdown(f"### 第 {curr_idx + 1} 問 / 全 {total_q} 問")
                 with c_top2:
-                    if st.button("🛠️ この問題を修正する"):
-                        img_name = get_clean_str(q.get("image") or q.get("画像"))
-                        char_name = get_clean_str(q.get("name") or q.get("名前"))
-                        
-                        target_kw = img_name or char_name
-                        if not target_kw:
-                            target_kw, _ = format_question_and_answer(q)
+                    if st.button("🛠️ この問題を修正する", key=f"btn_edit_q_{curr_idx}"):
+                        # 表示中の問題テキストまたは名前を確実に取得して検索キーにする
+                        target_kw = (
+                            get_clean_str(q.get("question"))
+                            or get_clean_str(q.get("name"))
+                            or question_text
+                        )
 
                         st.session_state["edit_search_keyword"] = target_kw
                         st.session_state["edit_active_tab"] = 1
                         st.session_state["current_nav"] = "➕ データ追加・編集"
                         st.rerun()
 
-                question_text, correct_ans_raw = format_question_and_answer(q)
                 st.info(f"**【問題】**\n{question_text}")
 
                 is_char_q = "このキャラクターの名前は？" in question_text or bool(q.get("image") or q.get("画像"))
