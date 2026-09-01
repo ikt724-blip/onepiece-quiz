@@ -954,27 +954,23 @@ elif selected == "🔍 AI検索モード":
 elif selected == "➕ データ追加・編集":
     st.title("➕ データ追加・編集")
 
-    # データをセッション状態で保持
     if "working_df" not in st.session_state or st.session_state["working_df"].empty:
         st.session_state["working_df"] = df_all.copy().reset_index(drop=True)
 
     tab_titles = ["📝 1. データの新規追加", "✏️ 2. データの編集・削除"]
 
-    # 🚀 他ページからの遷移リクエストを【描画前】に即座にラジオボタンの状態へ反映
+    # 他ページからの遷移リクエストを【描画前】に即座にラジオボタンの状態へ反映
     if "edit_active_tab" in st.session_state:
         req_tab = st.session_state.pop("edit_active_tab")
         if isinstance(req_tab, int) and 0 <= req_tab < len(tab_titles):
             st.session_state["data_edit_tab_radio"] = tab_titles[req_tab]
 
-    # 他モードからのダイレクト割り込み（問題直接指定）がある場合も編集タブを強制選択
     if "target_edit_global_index" in st.session_state or "edit_target_index" in st.session_state:
         st.session_state["data_edit_tab_radio"] = tab_titles[1]
 
-    # デフォルト選択値の安全チェック
     if "data_edit_tab_radio" not in st.session_state or st.session_state["data_edit_tab_radio"] not in tab_titles:
         st.session_state["data_edit_tab_radio"] = tab_titles[0]
 
-    # タブの作成
     tab_selection = st.radio(
         "操作を選択してください",
         tab_titles,
@@ -985,36 +981,194 @@ elif selected == "➕ データ追加・編集":
     # --- 1. 新規追加タブ ---
     if tab_selection == "📝 1. データの新規追加":
         st.subheader("📝 新しい問題データの追加")
-        st.caption("既存のデータ構造に合わせて、新しい問題を1件追加します。")
+        st.caption("出題形式を選択し、ステップに沿って問題データを入力してください。")
 
-        current_df = st.session_state["working_df"]
+        # STEP 1: 問題形式の選択
+        st.markdown("##### 📌 Step 1: 出題形式を選択")
+        type_options = [
+            "一問一答",
+            "一問多答",
+            "順序選択",
+            "6文字並べ替え",
+            "組み合わせ",
+            "自由記述"
+        ]
+        
+        type_descriptions = {
+            "一問一答": "4つの選択肢から、1つの解答を選択する問題。",
+            "一問多答": "4つの選択肢から、正解に該当する選択肢を複数選択する問題。",
+            "順序選択": "4つの選択肢を、順に選択して正しい順番に並べ替える問題。",
+            "6文字並べ替え": "6文字の選択肢を、正しい順番に並べ替える問題。",
+            "組み合わせ": "左右3つずつ計6つの選択肢から正しいペアを3つ作る問題。",
+            "自由記述": "解答を記述で入力する問題。"
+        }
 
-        if current_df.empty:
-            st.warning("基準となるデータ構造が存在しません。")
-        else:
-            with st.form(key="add_new_question_form"):
-                new_row = {}
-                cols = [c for c in current_df.columns if c not in ["_global_index", "_orig_row_id"]]
+        selected_type = st.selectbox("問題形式を選んでください", options=type_options, key="add_type_select")
+        st.info(f"💡 **{selected_type}**: {type_descriptions[selected_type]}")
+        st.markdown("---")
 
-                # 列ごとに適切な入力フィールドを生成
-                for col in cols:
-                    if col in ["question", "explanation", "問題", "解説"]:
-                        new_row[col] = st.text_area(f"【{col}】", value="", placeholder=f"{col}を入力してください")
-                    elif col in ["type", "出題形式"]:
-                        # 既存の出題形式から選択肢を提示
-                        type_opts = list(current_df[col].dropna().unique()) if col in current_df.columns else []
-                        if type_opts:
-                            new_row[col] = st.selectbox(f"【{col}】", options=type_opts)
-                        else:
-                            new_row[col] = st.text_input(f"【{col}】", value="")
-                    else:
-                        new_row[col] = st.text_input(f"【{col}】", value="")
+        # STEP 2 & 3: 問題入力フォーム
+        with st.form(key="add_new_question_detail_form"):
+            st.markdown("##### ✏️ Step 2: 新規問題の基本情報・画像の入力")
+            
+            f_col1, f_col2 = st.columns([2, 1])
+            with f_col1:
+                new_question = st.text_area("【問題文】*", placeholder="問題文を入力してください", height=100)
+                new_story = st.text_input("【ストーリー（編・章）】", placeholder="例: アラバスタ編、空島編など")
+            with f_col2:
+                q_img_file = st.file_uploader("🖼️ 問題用画像（任意）", type=["png", "jpg", "jpeg", "webp"], key="add_q_img")
+                q_img_url_input = st.text_input("または問題画像URL", placeholder="https://...")
 
-                if st.form_submit_button("➕ 新規問題をリストに追加", use_container_width=True):
-                    # 新しい行を作成して追加
-                    new_df = pd.DataFrame([new_row])
+            st.markdown("---")
+            st.markdown(f"##### 🎯 Step 3: 選択肢・解答の入力 （{selected_type}）")
+
+            new_options = {}
+            new_answer = ""
+
+            # --- 形式別フォーム ---
+            if selected_type == "一問一答":
+                c1, c2 = st.columns(2)
+                with c1:
+                    opt1 = st.text_input("選択肢 1*", key="add_q1")
+                    opt2 = st.text_input("選択肢 2*", key="add_q2")
+                with c2:
+                    opt3 = st.text_input("選択肢 3*", key="add_q3")
+                    opt4 = st.text_input("選択肢 4*", key="add_q4")
+                
+                new_options = {"option1": opt1, "option2": opt2, "option3": opt3, "option4": opt4}
+                ans_target = st.radio("正解の選択肢を選んでください*", ["選択肢 1", "選択肢 2", "選択肢 3", "選択肢 4"], horizontal=True)
+                ans_map = {"選択肢 1": opt1, "選択肢 2": opt2, "選択肢 3": opt3, "選択肢 4": opt4}
+                new_answer = ans_map[ans_target]
+
+            elif selected_type == "一問多答":
+                c1, c2 = st.columns(2)
+                with c1:
+                    opt1 = st.text_input("選択肢 1*", key="add_mq1")
+                    opt2 = st.text_input("選択肢 2*", key="add_mq2")
+                with c2:
+                    opt3 = st.text_input("選択肢 3*", key="add_mq3")
+                    opt4 = st.text_input("選択肢 4*", key="add_mq4")
+                
+                new_options = {"option1": opt1, "option2": opt2, "option3": opt3, "option4": opt4}
+                st.write("正解となる選択肢にチェックを入れてください（複数選択可）*")
+                ans_chk1 = st.checkbox(f"選択肢 1 ({opt1 or '未入力'})", key="chk_m1")
+                ans_chk2 = st.checkbox(f"選択肢 2 ({opt2 or '未入力'})", key="chk_m2")
+                ans_chk3 = st.checkbox(f"選択肢 3 ({opt3 or '未入力'})", key="chk_m3")
+                ans_chk4 = st.checkbox(f"選択肢 4 ({opt4 or '未入力'})", key="chk_m4")
+                
+                selected_answers = []
+                if ans_chk1 and opt1: selected_answers.append(opt1)
+                if ans_chk2 and opt2: selected_answers.append(opt2)
+                if ans_chk3 and opt3: selected_answers.append(opt3)
+                if ans_chk4 and opt4: selected_answers.append(opt4)
+                new_answer = ", ".join(selected_answers)
+
+            elif selected_type == "順序選択":
+                st.caption("正しい順番（1番目 → 4番目）になるように入力してください。")
+                c1, c2 = st.columns(2)
+                with c1:
+                    opt1 = st.text_input("1番目（正順）*", key="add_seq1")
+                    opt2 = st.text_input("2番目（正順）*", key="add_seq2")
+                with c2:
+                    opt3 = st.text_input("3番目（正順）*", key="add_seq3")
+                    opt4 = st.text_input("4番目（正順）*", key="add_seq4")
+                
+                new_options = {"option1": opt1, "option2": opt2, "option3": opt3, "option4": opt4}
+                new_answer = f"{opt1} -> {opt2} -> {opt3} -> {opt4}"
+
+            elif selected_type == "6文字並べ替え":
+                st.caption("正しい順番で6文字を入力してください。")
+                cols6 = st.columns(6)
+                chars = []
+                for idx, col in enumerate(cols6):
+                    with col:
+                        chars.append(st.text_input(f"{idx+1}文字目*", max_chars=1, key=f"add_char_{idx}"))
+                new_answer = "".join(chars)
+                new_options = {f"char_{i+1}": c for i, c in enumerate(chars)}
+
+            elif selected_type == "組み合わせ":
+                st.caption("正しいペア（左と右）を3組入力してください。")
+                p1_col1, p1_col2 = st.columns(2)
+                with p1_col1: left1 = st.text_input("ペア1 (左)*", key="pair_l1")
+                with p1_col2: right1 = st.text_input("ペア1 (右)*", key="pair_r1")
+
+                p2_col1, p2_col2 = st.columns(2)
+                with p2_col1: left2 = st.text_input("ペア2 (左)*", key="pair_l2")
+                with p2_col2: right2 = st.text_input("ペア2 (右)*", key="pair_r2")
+
+                p3_col1, p3_col2 = st.columns(2)
+                with p3_col1: left3 = st.text_input("ペア3 (左)*", key="pair_l3")
+                with p3_col2: right3 = st.text_input("ペア3 (右)*", key="pair_r3")
+
+                new_options = {
+                    "left": [left1, left2, left3],
+                    "right": [right1, right2, right3]
+                }
+                new_answer = f"{left1}-{right1}, {left2}-{right2}, {left3}-{right3}"
+
+            elif selected_type == "自由記述":
+                new_answer = st.text_input("正解の解答文字列*", placeholder="解答を入力してください")
+
+            st.markdown("---")
+            st.markdown("##### 💡 Step 4: 解説と解答画像の入力（任意）")
+            
+            exp_col1, exp_col2 = st.columns([2, 1])
+            with exp_col1:
+                new_explanation = st.text_area("【解説】", placeholder="解説を入力してください（任意）", height=80)
+            with exp_col2:
+                ans_img_file = st.file_uploader("🖼️ 解答/解説用画像（任意）", type=["png", "jpg", "jpeg", "webp"], key="add_ans_img")
+                ans_img_url_input = st.text_input("または解答画像URL", placeholder="https://...")
+
+            submit_btn = st.form_submit_button("➕ 新規問題を保存して追加", use_container_width=True)
+
+            if submit_btn:
+                if not new_question.strip():
+                    st.error("問題文を入力してください。")
+                elif not new_answer.strip():
+                    st.error("正解の解答（または選択肢）を入力・選択してください。")
+                else:
+                    # 画像URLの確定処理（アップロードファイルを最優先、なければ入力URL）
+                    final_q_img = ""
+                    if q_img_file is not None:
+                        # 画像をBase64形式に変換して保存
+                        import base64
+                        bytes_data = q_img_file.getvalue()
+                        base64_str = base64.b64encode(bytes_data).decode("utf-8")
+                        final_q_img = f"data:{q_img_file.type};base64,{base64_str}"
+                    elif q_img_url_input.strip():
+                        final_q_img = q_img_url_input.strip()
+
+                    final_ans_img = ""
+                    if ans_img_file is not None:
+                        import base64
+                        bytes_data = ans_img_file.getvalue()
+                        base64_str = base64.b64encode(bytes_data).decode("utf-8")
+                        final_ans_img = f"data:{ans_img_file.type};base64,{base64_str}"
+                    elif ans_img_url_input.strip():
+                        final_ans_img = ans_img_url_input.strip()
+
+                    # 新規データの行オブジェクト作成
+                    new_entry = {
+                        "type": selected_type,
+                        "question": new_question,
+                        "answer": new_answer,
+                        "explanation": new_explanation,
+                        "image": final_q_img,
+                        "answer_image": final_ans_img,
+                        "story": new_story
+                    }
+
+                    # 選択肢データの追加（文字列化して格納）
+                    if isinstance(new_options, dict):
+                        for k, v in new_options.items():
+                            new_entry[k] = str(v)
+                    elif isinstance(new_options, list):
+                        new_entry["options"] = ", ".join(new_options)
+
+                    # working_dfへ結合
+                    new_df = pd.DataFrame([new_entry])
                     st.session_state["working_df"] = pd.concat([st.session_state["working_df"], new_df], ignore_index=True)
-                    st.success("新しい問題を追加しました！「✏️ 2. データの編集・削除」タブで確認・編集できます。")
+                    st.success(f"新しい問題（{selected_type}）を追加しました！「✏️ 2. データの編集・削除」タブで確認・編集できます。")
                     st.rerun()
 
     # --- 2. 編集・削除タブ ---
@@ -1026,7 +1180,6 @@ elif selected == "➕ データ追加・編集":
         if current_df.empty:
             st.info("編集対象のデータがありません。")
         else:
-            # 🚀 練習モードや他ページからのダイレクト割り込み処理
             target_idx = None
             if "target_edit_global_index" in st.session_state:
                 target_idx = st.session_state.pop("target_edit_global_index")
@@ -1083,7 +1236,6 @@ elif selected == "➕ データ追加・編集":
             with f_col3:
                 keyword = st.text_input("キーワード検索", placeholder="問題文や解答で検索", key="filter_keyword")
 
-            # フィルタリング適用
             filtered_df = current_df.copy()
             filtered_df["_orig_row_id"] = current_df.index
 
@@ -1128,7 +1280,6 @@ elif selected == "➕ データ追加・編集":
                 st.markdown("---")
                 st.markdown(f"#### ✏️ 問題 No.{orig_index + 1} の編集・削除")
 
-                # 編集フォーム
                 with st.form(key=f"edit_form_{orig_index}"):
                     edited_data = {}
                     for col in current_df.columns:
@@ -1148,7 +1299,6 @@ elif selected == "➕ データ追加・編集":
                         st.success(f"問題 No.{orig_index + 1} の更新を保存しました！")
                         st.rerun()
 
-                # --- 🗑️ 問題の削除処理エリア ---
                 with st.expander("🗑️ この問題を削除する（危険エリア）"):
                     st.warning("この操作を実行すると、作業データから問題が取り除かれます。")
                     confirm_delete = st.checkbox("本当に削除してよろしければチェックを入れてください", key=f"chk_del_{orig_index}")
