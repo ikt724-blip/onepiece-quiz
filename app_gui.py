@@ -151,7 +151,6 @@ def format_question_and_answer(q):
     return "このキャラクターの名前は？", name
 
 # --- 2. サイドバーナビゲーション ---
-# ※ 絵文字を外し、判定ズレが絶対に起きないシンプルな文字列にします
 menu_options = [
     "ホーム",
     "練習モード",
@@ -174,21 +173,17 @@ with st.sidebar:
         options=menu_options,
         icons=["house", "book", "trophy", "fire", "search", "pencil", "person"],
         default_index=def_idx,
-        key="main_menu_nav" # キーを固定してバグを防ぎます
+        key="main_menu_nav"
     )
     
-    # 選択されたメニューをセッションに保存
     st.session_state["current_nav"] = selected
-
-# デバッグ用：現在どの画面が選ばれているか画面上部に表示
-st.info(f"💡 現在選択中のモード: **{selected}**")
 
 current_data = st.session_state.get("working_df", pd.DataFrame())
 
-# --- 以下、各画面の枠組み（テスト用） ---
+# --- 画面制御 ---
 if selected == "ホーム":
     st.title("🏠 ホーム画面")
-    st.write("ここはホームです。")
+    st.write("メニューからプレイしたいモードを選択してください。")
 
 elif selected == "練習モード":
     st.title("📖 練習モード")
@@ -202,7 +197,6 @@ elif selected == "本番模試":
     if current_data.empty:
         st.warning("⚠️ 出題できるデータが読み込まれていません。Excelファイルを確認してください。")
     else:
-        # セッション状態の初期化
         if "exam_started" not in st.session_state:
             st.session_state.exam_started = False
         if "e_curr_idx" not in st.session_state:
@@ -212,7 +206,6 @@ elif selected == "本番模試":
         if "e_user_answers" not in st.session_state:
             st.session_state.e_user_answers = {}
 
-        # スタート前画面
         if not st.session_state.exam_started:
             st.info(f"📚 現在の総問題数: **{len(current_data)} 問**")
             if st.button("🔥 模試を開始する", type="primary", use_container_width=True):
@@ -227,12 +220,10 @@ elif selected == "本番模試":
                 st.session_state.exam_started = True
                 st.rerun()
 
-        # 模試実施中画面
         else:
             total_q = len(st.session_state.e_quiz_list)
             curr_idx = st.session_state.e_curr_idx
 
-            # 終了判定
             if curr_idx >= total_q:
                 st.balloons()
                 st.markdown("## 🏁 模試終了！ 結果発表")
@@ -270,7 +261,6 @@ elif selected == "本番模試":
                     st.session_state.exam_started = False
                     st.rerun()
 
-            # 出題中
             else:
                 st.progress((curr_idx) / total_q)
                 q = st.session_state.e_quiz_list[curr_idx]
@@ -302,7 +292,6 @@ elif selected == "AI検索":
         
         filtered_df = current_data.copy()
         if search_query.strip():
-            # 全カラムを対象に文字列検索
             mask = filtered_df.astype(str).apply(
                 lambda x: x.str.contains(search_query.strip(), case=False, na=False)
             ).any(axis=1)
@@ -311,12 +300,12 @@ elif selected == "AI検索":
         st.markdown(f"検索結果: **{len(filtered_df)}** 件")
         st.dataframe(filtered_df, use_container_width=True)
 
+
 elif selected == "苦手克服":
     st.title("🔥 苦手克服モード")
     st.caption("練習モードや本番模試で間違えた問題だけを集中して復習できます。")
     st.write("---")
 
-    # セッションから苦手問題のインデックスを取得
     wrong_indices = list(st.session_state.get("wrong_q_indices", set()))
     
     if not wrong_indices:
@@ -333,7 +322,6 @@ elif selected == "苦手克服":
 
         if not st.session_state.review_started:
             if st.button("🔥 苦手問題の復習を開始する", type="primary", use_container_width=True):
-                # 苦手問題のみを抽出
                 wrong_df = current_data.iloc[wrong_indices].copy()
                 wrong_df["_original_index"] = wrong_df.index
                 st.session_state.r_quiz_list = wrong_df.to_dict("records")
@@ -414,9 +402,8 @@ elif selected == "キャラ名鑑":
 
         st.caption(f"該当件数: **{len(char_df)}** 件")
         
-        # グリッド表示 (3列)
         cols = st.columns(3)
-        for idx, (_, row) in enumerate(char_df.head(60).iterrows()): # 動作を軽くするため60件表示制限
+        for idx, (_, row) in enumerate(char_df.head(60).iterrows()):
             c_name = get_clean_str(row.get("name") or row.get("名前") or row.get("question") or f"No.{idx + 1}")
             c_nick = get_clean_str(row.get("nickname") or row.get("異名"))
             c_img = get_clean_str(row.get("image") or row.get("画像"))
