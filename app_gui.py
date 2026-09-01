@@ -150,34 +150,69 @@ def format_question_and_answer(q):
     if name: return "このキャラクターの名前は？", name
     return "このキャラクターの名前は？", name
 
-# --- 2. サイドバーナビゲーション（二重表示修復済） ---
+# --- 2. サイドバーナビゲーション ---
+# ※ 絵文字を外し、判定ズレが絶対に起きないシンプルな文字列にします
 menu_options = [
     "ホーム",
     "練習モード",
-    "本番模試 (50問/60分)",
+    "本番模試",
     "苦手克服",
-    "AI検索モード",
-    "データ追加・編集",
-    "キャラクターデータ",
+    "AI検索",
+    "データ編集",
+    "キャラ名鑑",
 ]
 
-if "current_nav" not in st.session_state or st.session_state["current_nav"] not in menu_options:
+if "current_nav" not in st.session_state:
     st.session_state["current_nav"] = menu_options[0]
 
 with st.sidebar:
     st.header("🏴‍☠️ ナビセンター")
-    def_idx = menu_options.index(st.session_state["current_nav"])
+    def_idx = menu_options.index(st.session_state["current_nav"]) if st.session_state["current_nav"] in menu_options else 0
 
     selected = option_menu(
         menu_title=None,
         options=menu_options,
-        icons=["house", "book", "trophy", "exclamation-triangle", "search", "plus-circle", "flag"],
+        icons=["house", "book", "trophy", "fire", "search", "pencil", "person"],
         default_index=def_idx,
-        key=f"menu_nav_state_{st.session_state['current_nav']}",
+        key="main_menu_nav" # キーを固定してバグを防ぎます
     )
+    
+    # 選択されたメニューをセッションに保存
     st.session_state["current_nav"] = selected
 
-current_data = st.session_state["working_df"]
+# デバッグ用：現在どの画面が選ばれているか画面上部に表示
+st.info(f"💡 現在選択中のモード: **{selected}**")
+
+current_data = st.session_state.get("working_df", pd.DataFrame())
+
+# --- 以下、各画面の枠組み（テスト用） ---
+if selected == "ホーム":
+    st.title("🏠 ホーム画面")
+    st.write("ここはホームです。")
+
+elif selected == "練習モード":
+    st.title("📖 練習モード")
+    st.write("ここは練習モードです。")
+
+elif selected == "本番模試":
+    st.title("🏆 本番模試")
+    st.write("ここは本番模試です。")
+
+elif selected == "苦手克服":
+    st.title("🔥 苦手克服")
+    st.write("ここは苦手克服モードです。")
+
+elif selected == "AI検索":
+    st.title("🔍 AI検索")
+    st.write("ここはAI検索モードです。")
+
+elif selected == "データ編集":
+    st.title("✏️ データ追加・編集")
+    st.write("ここはデータ編集モードです。")
+
+elif selected == "キャラ名鑑":
+    st.title("🏴 キャラクター名鑑")
+    st.write("ここはキャラ名鑑です。")
 
 # --- 3. ホーム画面 ---
 if selected == "ホーム":
