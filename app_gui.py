@@ -958,7 +958,7 @@ elif selected == "➕ データ追加・編集":
     default_tab_idx = st.session_state.get("edit_active_tab", 0)
 
     # タブの作成（ラジオボタンによる切替）
-    tab_titles = ["📝 1. データの新規追加", "✏️ 2. データの編集・修正"]
+    tab_titles = ["📝 1. データの新規追加", "✏️ 2. データの編集・削除"]
     
     tab_selection = st.radio(
         "操作を選択してください",
@@ -974,9 +974,9 @@ elif selected == "➕ データ追加・編集":
         # （既存の新規追加フォームコードをここに配置）
         st.info("ここに新規問題追加用のフォームが入ります。")
 
-    # --- 2. 編集・修正タブ ---
-    elif tab_selection == "✏️ 2. データの編集・修正":
-        st.subheader("🛠️ かんたん問題修正フォーム")
+    # --- 2. 編集・削除タブ ---
+    elif tab_selection == "✏️ 2. データの編集・削除":
+        st.subheader("🛠️ かんたん問題修正・削除フォーム")
 
         if "working_df" not in st.session_state or st.session_state["working_df"].empty:
             st.session_state["working_df"] = df_all.copy().reset_index(drop=True)
@@ -1066,7 +1066,7 @@ elif selected == "➕ データ追加・編集":
 
                 # 該当問題の選択セレクトボックス
                 selected_pos = st.selectbox(
-                    f"編集・修正する問題を選択（全 {filtered_count} 件）",
+                    f"編集・削除する問題を選択（全 {filtered_count} 件）",
                     options=list(range(filtered_count)),
                     format_func=lambda i: f"【No.{filtered_df.iloc[i].get('index', i) + 1}】 {str(filtered_df.iloc[i].get('question', filtered_df.iloc[i].get('name', '')))[:35]}...",
                     key="edit_sub_idx"
@@ -1076,7 +1076,7 @@ elif selected == "➕ データ追加・編集":
                 orig_index = selected_row["index"]
 
                 st.markdown("---")
-                st.markdown(f"#### ✏️ 問題 No.{orig_index + 1} の編集")
+                st.markdown(f"#### ✏️ 問題 No.{orig_index + 1} の編集・削除")
 
                 # 編集フォーム
                 with st.form(key=f"edit_form_{orig_index}"):
@@ -1096,6 +1096,18 @@ elif selected == "➕ データ追加・編集":
                         for col, new_val in edited_data.items():
                             st.session_state["working_df"].at[orig_index, col] = new_val
                         st.success(f"問題 No.{orig_index + 1} の更新を保存しました！")
+                        st.rerun()
+
+                # --- 🗑️ 問題の削除処理エリア ---
+                with st.expander("🗑️ この問題を削除する（危険エリア）"):
+                    st.warning("この操作を実行すると、作業データから問題が取り除かれます。")
+                    confirm_delete = st.checkbox("本当に削除してよろしければチェックを入れてください", key=f"chk_del_{orig_index}")
+                    
+                    if st.button("🚨 問題を完全に削除", type="primary", disabled=not confirm_delete, key=f"btn_del_{orig_index}"):
+                        # working_df から該当行を削除してインデックスを振り直す
+                        st.session_state["working_df"] = st.session_state["working_df"].drop(index=orig_index).reset_index(drop=True)
+                        st.session_state["edit_sub_idx"] = 0
+                        st.success(f"問題 No.{orig_index + 1} を削除しました。")
                         st.rerun()
 
 # --- 7. キャラクターデータモード ---
