@@ -445,7 +445,9 @@ if selected == "ホーム":
     st.divider()
 # --- 2. 練習モード ---
 elif selected == "📖 練習モード":
-    st.subheader("📖 練習モード")
+    st.title("📖 練習モード")
+    st.caption("自分のペースで苦手克服！出題条件を自由にカスタマイズして挑戦しましょう。")
+    st.write("---")
 
     if df_all.empty:
         st.warning("出題できるデータが見つかりません。")
@@ -461,54 +463,74 @@ elif selected == "📖 練習モード":
         if "p_user_answers" not in st.session_state:
             st.session_state.p_user_answers = []
 
+        # ==========================================
+        # 1. 練習開始前の設定画面（カードデザイン適用）
+        # ==========================================
         if not st.session_state.practice_started:
-            st.success(
-                f"全 {len(df_all)} 問の中から自由に出題条件を設定できます。"
-            )
+            with st.container(border=True):
+                # 上段：ダッシュボード風ステータス表示
+                m_col1, m_col2 = st.columns([1, 2])
+                with m_col1:
+                    st.metric(label="📚 総問題数", value=f"{len(df_all):,} 問")
+                with m_col2:
+                    st.info("💡 **ヒント**: 条件を絞り込むことで、特定の分野や形式を集中して効率よく学習できます。", icon="ℹ️")
 
-            col1, col2 = st.columns(2)
-            with col1:
-                num_q = st.number_input(
-                    "出題数を選択",
-                    min_value=1,
-                    max_value=min(len(df_all), 100),
-                    value=min(len(df_all), 10),
-                )
-            with col2:
-                q_type_filter = st.selectbox(
-                    "問題タイプ", ["すべて", "記述問題", "並び替え問題", "キャラマスター"]
-                )
+                st.divider()
 
-            if st.button("🚀 練習を開始する", use_container_width="stretch"):
-                target_df = df_all.copy()
-                # 🚀 追加: 元のデータフレームでの行番号（ID）を記憶しておく
-                target_df["_original_index"] = target_df.index
-                
-                if q_type_filter == "記述問題" and "type" in target_df.columns:
-                    target_df = target_df[target_df["type"] == "記述"]
-                elif (
-                    q_type_filter == "並び替え問題" and "type" in target_df.columns
-                ):
-                    target_df = target_df[target_df["type"] == "並び替え"]
-                elif (
-                    q_type_filter == "キャラマスター"
-                    and "type" in target_df.columns
-                ):
-                    target_df = target_df[target_df["type"] == "キャラデータ"]
+                # 中段：条件設定フォーム
+                st.markdown("##### ⚙️ 出題条件の設定")
+                col1, col2 = st.columns(2)
+                with col1:
+                    num_q = st.number_input(
+                        "🔢 出題数を選択",
+                        min_value=1,
+                        max_value=min(len(df_all), 100),
+                        value=min(len(df_all), 10),
+                        help="一度に挑戦する問題数を指定します。"
+                    )
+                with col2:
+                    q_type_filter = st.selectbox(
+                        "🏷️ 問題タイプ", 
+                        ["すべて", "記述問題", "並び替え問題", "キャラマスター"],
+                        help="特定の出題形式だけに絞り込むことができます。"
+                    )
 
-                if target_df.empty:
+                st.write("") # スペース確保
+
+                # 下段：メインアクションボタン（プライマリカラー＆フルサイズ）
+                if st.button("🚀 練習を開始する", type="primary", use_container_width=True):
                     target_df = df_all.copy()
+                    # 🚀 追加: 元のデータフレームでの行番号（ID）を記憶しておく
+                    target_df["_original_index"] = target_df.index
+                    
+                    if q_type_filter == "記述問題" and "type" in target_df.columns:
+                        target_df = target_df[target_df["type"] == "記述"]
+                    elif (
+                        q_type_filter == "並び替え問題" and "type" in target_df.columns
+                    ):
+                        target_df = target_df[target_df["type"] == "並び替え"]
+                    elif (
+                        q_type_filter == "キャラマスター"
+                        and "type" in target_df.columns
+                    ):
+                        target_df = target_df[target_df["type"] == "キャラデータ"]
 
-                shuffled = target_df.sample(
-                    n=min(num_q, len(target_df))
-                ).reset_index(drop=True)
-                st.session_state.p_quiz_list = shuffled.to_dict("records")
-                st.session_state.p_curr_idx = 0
-                st.session_state.p_score = 0
-                st.session_state.p_user_answers = []
-                st.session_state.practice_started = True
-                st.rerun()
+                    if target_df.empty:
+                        target_df = df_all.copy()
 
+                    shuffled = target_df.sample(
+                        n=min(num_q, len(target_df))
+                    ).reset_index(drop=True)
+                    st.session_state.p_quiz_list = shuffled.to_dict("records")
+                    st.session_state.p_curr_idx = 0
+                    st.session_state.p_score = 0
+                    st.session_state.p_user_answers = []
+                    st.session_state.practice_started = True
+                    st.rerun()
+
+        # ==========================================
+        # 2. 練習中の出題画面・結果表示
+        # ==========================================
         else:
             total_q = len(st.session_state.p_quiz_list)
             curr_idx = st.session_state.p_curr_idx
@@ -520,9 +542,9 @@ elif selected == "📖 練習モード":
                 )
                 res_df = pd.DataFrame(st.session_state.p_user_answers)
                 if not res_df.empty:
-                    st.dataframe(res_df, use_container_width="stretch")
+                    st.dataframe(res_df, use_container_width=True)
 
-                if st.button("🔄 もう一度練習する"):
+                if st.button("🔄 もう一度練習する", type="primary"):
                     st.session_state.practice_started = False
                     st.rerun()
             else:
@@ -588,11 +610,11 @@ elif selected == "📖 練習モード":
                     sub_c1, sub_c2 = st.columns(2)
                     with sub_c1:
                         submitted = st.form_submit_button(
-                            "回答する", use_container_width="stretch"
+                            "回答する", use_container_width=True
                         )
                     with sub_c2:
                         passed = st.form_submit_button(
-                            "パス", use_container_width="stretch"
+                            "パス", use_container_width=True
                         )
 
                 if submitted:
