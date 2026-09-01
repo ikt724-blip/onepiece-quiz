@@ -183,7 +183,6 @@ current_data = st.session_state.get("working_df", pd.DataFrame())
 # --- 画面制御 ---
 if selected == "ホーム":
     import streamlit.components.v1 as components
-
     all_imgs = (
         glob.glob("images/*.png")
         + glob.glob("images/*.jpg")
@@ -191,426 +190,6 @@ if selected == "ホーム":
         + glob.glob("*.png")
         + glob.glob("*.jpg")
     )
-
-    wt100_full_html = ""
-
-    if all_imgs:
-        sample_imgs = random.sample(all_imgs, min(len(all_imgs), 60))
-        
-        NUM_COLS = 6
-        columns_b64 = [[] for _ in range(NUM_COLS)]
-        
-        img_idx = 0
-        for img_path in sample_imgs:
-            if os.path.exists(img_path):
-                b64_str = image_to_base64(img_path)
-                if b64_str:
-                    columns_b64[img_idx % NUM_COLS].append(b64_str)
-                    img_idx += 1
-
-        cols_html_list = []
-        for i, col_imgs in enumerate(columns_b64):
-            if not col_imgs:
-                continue
-            duplicated_imgs = col_imgs + col_imgs
-            imgs_tags = "".join([f'<div class="img-box"><img src="{b64}" class="scroll-img" /></div>' for b64 in duplicated_imgs])
-            
-            col_class = "col-down" if i % 2 == 0 else "col-up"
-            speed_class = f"speed-{(i % 3) + 1}"
-            
-            col_block = f'''
-            <div class="scroll-column {col_class} {speed_class}">
-                <div class="scroll-track">
-                    {imgs_tags}
-                </div>
-            </div>
-            '''
-            cols_html_list.append(col_block)
-
-        cols_html = "".join(cols_html_list)
-
-        wt100_full_html = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-        <style>
-        * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-        html, body {{
-            width: 100%;
-            height: 100%;
-            background-color: #0e1117;
-            font-family: sans-serif;
-            overflow: hidden;
-        }}
-
-        .wt-hero-container {{
-            position: relative;
-            width: 100%;
-            height: 600px;
-            background-color: #000;
-            overflow: hidden;
-            border-radius: 12px;
-        }}
-
-        .scroll-wrapper {{
-            display: flex;
-            width: 100%;
-            height: 100%;
-            gap: 4px;
-            opacity: 0.85;
-            background-color: #000;
-        }}
-
-        .scroll-column {{
-            flex: 1;
-            height: 100%;
-            overflow: hidden;
-            position: relative;
-        }}
-
-        .scroll-track {{
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-            width: 100%;
-        }}
-
-        .img-box {{
-            width: 100%;
-            height: 130px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background-color: #111;
-            border-radius: 4px;
-            overflow: hidden;
-        }}
-
-        .scroll-img {{
-            max-width: 100%;
-            max-height: 100%;
-            object-fit: contain;
-            display: block;
-        }}
-
-        @keyframes scrollDown {{
-            0% {{ transform: translateY(-50%); }}
-            100% {{ transform: translateY(0%); }}
-        }}
-
-        @keyframes scrollUp {{
-            0% {{ transform: translateY(0%); }}
-            100% {{ transform: translateY(-50%); }}
-        }}
-
-        .col-down .scroll-track {{ animation: scrollDown linear infinite; }}
-        .col-up .scroll-track {{ animation: scrollUp linear infinite; }}
-
-        .speed-1 .scroll-track {{ animation-duration: 22s; }}
-        .speed-2 .scroll-track {{ animation-duration: 28s; }}
-        .speed-3 .scroll-track {{ animation-duration: 34s; }}
-
-        .wt-overlay {{
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 10;
-            pointer-events: none;
-            background: radial-gradient(circle, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.85) 100%);
-        }}
-
-        .wt-title {{
-            text-align: center;
-            color: #fff;
-            text-shadow: 0 4px 20px rgba(0,0,0,0.95), 0 0 25px rgba(255, 0, 0, 0.8);
-        }}
-
-        .wt-title h1 {{
-            font-size: 2.6rem;
-            font-weight: 900;
-            margin: 0;
-            letter-spacing: 2px;
-            color: #ffffff;
-        }}
-
-        .wt-title p {{
-            font-size: 1.1rem;
-            color: #ff3b30;
-            font-weight: bold;
-            margin-top: 8px;
-        }}
-        </style>
-        </head>
-        <body>
-            <div class="wt-hero-container">
-                <div class="scroll-wrapper">
-                    {cols_html}
-                </div>
-                <div class="wt-overlay">
-                    <div class="wt-title">
-                        <h1>🏴‍☠️ ONE PIECE ナレッジキング対策</h1>
-                        <p>― 最強のデータベースを脳に刻め ―</p>
-                    </div>
-                </div>
-            </div>
-        </body>
-        </html>
-        """
-
-    if wt100_full_html:
-        components.html(wt100_full_html, height=620)
-    else:
-        st.warning("表示できる画像ファイル（.png / .jpg）が見つかりません。")
-
-    st.divider()
-
-elif selected == "練習モード":
-    st.title("📖 練習モード")
-    st.write("ここは練習モードです。")
-
-elif selected == "本番模試":
-    st.title("🏆 本番模試 (50問 / 60分)")
-    st.caption("全データからランダムで50問出題されます。")
-    st.write("---")
-
-    if current_data.empty:
-        st.warning("⚠️ 出題できるデータが読み込まれていません。Excelファイルを確認してください。")
-    else:
-        if "exam_started" not in st.session_state:
-            st.session_state.exam_started = False
-        if "e_curr_idx" not in st.session_state:
-            st.session_state.e_curr_idx = 0
-        if "e_quiz_list" not in st.session_state:
-            st.session_state.e_quiz_list = []
-        if "e_user_answers" not in st.session_state:
-            st.session_state.e_user_answers = {}
-
-        if not st.session_state.exam_started:
-            st.info(f"📚 現在の総問題数: **{len(current_data)} 問**")
-            if st.button("🔥 模試を開始する", type="primary", use_container_width=True):
-                target_df = current_data.copy()
-                target_df["_original_index"] = target_df.index
-                num_questions = min(50, len(target_df))
-                shuffled = target_df.sample(n=num_questions).reset_index(drop=True)
-                
-                st.session_state.e_quiz_list = shuffled.to_dict("records")
-                st.session_state.e_curr_idx = 0
-                st.session_state.e_user_answers = {}
-                st.session_state.exam_started = True
-                st.rerun()
-
-        else:
-            total_q = len(st.session_state.e_quiz_list)
-            curr_idx = st.session_state.e_curr_idx
-
-            if curr_idx >= total_q:
-                st.balloons()
-                st.markdown("## 🏁 模試終了！ 結果発表")
-                
-                score = 0
-                summary_data = []
-                for idx, q_item in enumerate(st.session_state.e_quiz_list):
-                    q_txt, c_ans_raw = format_question_and_answer(q_item)
-                    correct_list = get_correct_answers_list(q_item, c_ans_raw)
-                    u_ans = st.session_state.e_user_answers.get(idx, "")
-                    
-                    is_c = check_answers_multi([u_ans], correct_list)
-                    orig_idx = q_item.get("_original_index")
-                    
-                    if is_c:
-                        score += 1
-                        if orig_idx is not None:
-                            st.session_state["wrong_q_indices"].discard(orig_idx)
-                    else:
-                        if orig_idx is not None:
-                            st.session_state["wrong_q_indices"].add(orig_idx)
-
-                    summary_data.append({
-                        "問": idx + 1,
-                        "問題文": q_txt,
-                        "あなたの解答": u_ans,
-                        "正解": "、".join(correct_list),
-                        "判定": "⭕ 正解" if is_c else "❌ 不正解"
-                    })
-
-                st.markdown(f"### 最終得点: **{score} / {total_q} 問**")
-                st.dataframe(pd.DataFrame(summary_data), use_container_width=True)
-
-                if st.button("🔄 もう一度模試を受ける", type="primary"):
-                    st.session_state.exam_started = False
-                    st.rerun()
-
-            else:
-                st.progress((curr_idx) / total_q)
-                q = st.session_state.e_quiz_list[curr_idx]
-                st.markdown(f"### 第 {curr_idx + 1} 問 / 全 {total_q} 問")
-                
-                question_text, correct_ans_raw = format_question_and_answer(q)
-                st.info(f"**【問題】**\n{question_text}")
-                display_question_image(q, show_caption=False)
-
-                with st.form(f"exam_form_{curr_idx}"):
-                    curr_input = st.text_input("解答を入力", key=f"e_ans_{curr_idx}")
-                    sub_next = st.form_submit_button("回答して次の問題へ ➡", use_container_width=True)
-
-                if sub_next:
-                    st.session_state.e_user_answers[curr_idx] = curr_input
-                    st.session_state.e_curr_idx += 1
-                    st.rerun()
-
-
-elif selected == "AI検索":
-    st.title("🔍 AI検索モード")
-    st.caption("キーワードで問題やキャラクター情報を瞬時に一括検索できます。")
-    st.write("---")
-
-    if current_data.empty:
-        st.warning("⚠️ 検索対象のデータが読み込まれていません。")
-    else:
-        search_query = st.text_input("🔍 キーワードを入力（例: ルフィ、ゴムゴム、アラバスタ）", "")
-        
-        filtered_df = current_data.copy()
-        if search_query.strip():
-            mask = filtered_df.astype(str).apply(
-                lambda x: x.str.contains(search_query.strip(), case=False, na=False)
-            ).any(axis=1)
-            filtered_df = filtered_df[mask]
-
-        st.markdown(f"検索結果: **{len(filtered_df)}** 件")
-        st.dataframe(filtered_df, use_container_width=True)
-
-
-elif selected == "苦手克服":
-    st.title("🔥 苦手克服モード")
-    st.caption("練習モードや本番模試で間違えた問題だけを集中して復習できます。")
-    st.write("---")
-
-    wrong_indices = list(st.session_state.get("wrong_q_indices", set()))
-    
-    if not wrong_indices:
-        st.success("🎉 現在、登録されている苦手問題はありません！順調なペースです。")
-    else:
-        st.warning(f"現在 **{len(wrong_indices)} 問** の苦手問題が記録されています。")
-        
-        if "review_started" not in st.session_state:
-            st.session_state.review_started = False
-        if "r_curr_idx" not in st.session_state:
-            st.session_state.r_curr_idx = 0
-        if "r_quiz_list" not in st.session_state:
-            st.session_state.r_quiz_list = []
-
-        if not st.session_state.review_started:
-            if st.button("🔥 苦手問題の復習を開始する", type="primary", use_container_width=True):
-                wrong_df = current_data.iloc[wrong_indices].copy()
-                wrong_df["_original_index"] = wrong_df.index
-                st.session_state.r_quiz_list = wrong_df.to_dict("records")
-                st.session_state.r_curr_idx = 0
-                st.session_state.review_started = True
-                st.rerun()
-        else:
-            total_q = len(st.session_state.r_quiz_list)
-            curr_idx = st.session_state.r_curr_idx
-
-            if curr_idx >= total_q:
-                st.balloons()
-                st.markdown("## 🎉 苦手克服トレーニング完了！")
-                if st.button("🔄 モード選択へ戻る", type="primary"):
-                    st.session_state.review_started = False
-                    st.rerun()
-            else:
-                q = st.session_state.r_quiz_list[curr_idx]
-                st.progress((curr_idx) / total_q)
-                st.markdown(f"### 苦手復習 第 {curr_idx + 1} 問 / 全 {total_q} 問")
-
-                question_text, correct_ans_raw = format_question_and_answer(q)
-                st.info(f"**【問題】**\n{question_text}")
-                display_question_image(q, show_caption=False)
-
-                correct_list = get_correct_answers_list(q, correct_ans_raw)
-
-                with st.form(f"review_form_{curr_idx}"):
-                    u_input = st.text_input("解答を入力", key=f"r_ans_{curr_idx}")
-                    sub_rev = st.form_submit_button("回答する", use_container_width=True)
-
-                if sub_rev:
-                    is_correct = check_answers_multi([u_input], correct_list)
-                    disp_ans = "、".join(correct_list)
-                    orig_idx = q.get("_original_index")
-                    
-                    if is_correct:
-                        st.success("⭕ 正解！苦手リストから解除されました。")
-                        if orig_idx is not None:
-                            st.session_state["wrong_q_indices"].discard(orig_idx)
-                    else:
-                        st.error(f"❌ 不正解... 正解は: **{disp_ans}**")
-
-                    exp = get_clean_str(q.get("explanation") or q.get("解説"))
-                    if exp:
-                        st.caption(f"💡 【解説】: {exp}")
-                    
-                    st.session_state.r_curr_idx += 1
-                    st.button("次の問題へ ➡")
-
-
-elif selected == "データ編集":
-    st.title("✏️ データ追加・編集")
-    st.caption("問題データの新規追加や修正を行えます。")
-    st.write("---")
-
-    if current_data.empty:
-        st.warning("⚠️ データが見つかりません。")
-    else:
-        st.subheader("データ一覧")
-        st.dataframe(current_data, use_container_width=True)
-
-
-elif selected == "キャラ名鑑":
-    st.title("🏴 キャラクター名鑑")
-    st.caption("登録されている全キャラクターをカード形式で一覧表示します。")
-    st.write("---")
-
-    if current_data.empty:
-        st.warning("⚠️ 表示できるキャラデータがありません。")
-    else:
-        search_kw = st.text_input("🔍 キャラクター検索", "", placeholder="名前、異名、所属などで絞り込み")
-        char_df = current_data.copy()
-
-        if search_kw.strip():
-            mask = char_df.astype(str).apply(lambda x: x.str.contains(search_kw.strip(), case=False, na=False)).any(axis=1)
-            char_df = char_df[mask]
-
-        st.caption(f"該当件数: **{len(char_df)}** 件")
-        
-        cols = st.columns(3)
-        for idx, (_, row) in enumerate(char_df.head(60).iterrows()):
-            c_name = get_clean_str(row.get("name") or row.get("名前") or row.get("question") or f"No.{idx + 1}")
-            c_nick = get_clean_str(row.get("nickname") or row.get("異名"))
-            c_img = get_clean_str(row.get("image") or row.get("画像"))
-            c_aff = get_clean_str(row.get("affiliation") or row.get("所属"))
-            c_fruit = get_clean_str(row.get("devil_fruit") or row.get("悪魔の実") or row.get("answer"))
-
-            with cols[idx % 3]:
-                with st.container(border=True):
-                    if c_img:
-                        st.image(c_img, use_container_width=True)
-                    st.markdown(f"**{c_name}**")
-                    if c_nick:
-                        st.caption(f"【{c_nick}】")
-                    if c_aff:
-                        st.caption(f"🏴 {c_aff}")
-                    if c_fruit:
-                        st.caption(f"🍈 {c_fruit}")
-
-# --- 3. ホーム画面 ---
-if selected == "ホーム":
-    import streamlit.components.v1 as components
-    all_imgs = glob.glob("images/*.png") + glob.glob("images/*.jpg") + glob.glob("images/*.jpeg") + glob.glob("*.png") + glob.glob("*.jpg")
     wt100_full_html = ""
 
     if all_imgs:
@@ -668,7 +247,6 @@ if selected == "ホーム":
     else:
         st.warning("表示できる画像ファイルが見つかりません。")
 
-# --- 4. 練習モード ---
 elif selected == "練習モード":
     st.title("📖 練習モード")
     st.caption("自分のペースで苦手克服！出題条件を自由にカスタマイズして挑戦しましょう。")
@@ -733,7 +311,7 @@ elif selected == "練習モード":
                         st.session_state["target_edit_global_index"] = q.get("_original_index", curr_idx)
                         st.session_state["edit_active_tab"] = 1
                         st.session_state["data_edit_tab_radio"] = "✏️ 2. データの編集・削除"
-                        st.session_state["current_nav"] = "データ追加・編集"
+                        st.session_state["current_nav"] = "データ編集"
                         st.rerun()
 
                 question_text, correct_ans_raw = format_question_and_answer(q)
@@ -776,9 +354,8 @@ elif selected == "練習モード":
                     st.session_state.p_curr_idx += 1
                     st.rerun()
 
-# --- 5. 本番模試 ---
-elif selected == "本番模試 (50問/60分)":
-    st.title("🏆 本番模試（50問 / 60分）")
+elif selected == "本番模試":
+    st.title("🏆 本番模試 (50問 / 60分)")
     st.caption("本番同様の制限時間で挑戦！全データからランダム出題されます。")
     st.write("---")
 
@@ -855,7 +432,6 @@ elif selected == "本番模試 (50問/60分)":
                     st.session_state.e_curr_idx += 1
                     st.rerun()
 
-# --- 6. 苦手克服 ---
 elif selected == "苦手克服":
     st.title("🔥 苦手克服モード")
     st.caption("練習モードや本番模試で間違えた問題だけをまとめて集中復習！")
@@ -920,8 +496,7 @@ elif selected == "苦手克服":
                     st.session_state.r_curr_idx += 1
                     st.button("次へ ➡")
 
-# --- 7. AI検索モード ---
-elif selected == "AI検索モード":
+elif selected == "AI検索":
     st.title("🔍 AI検索モード")
     st.caption("〜 キャラクターマスタ＆問題データベース 爆速逆引き図鑑 〜")
     st.write("---")
@@ -938,8 +513,7 @@ elif selected == "AI検索モード":
         st.markdown(f"検索結果: **{len(filtered_df)}** 件")
         st.dataframe(filtered_df, use_container_width=True)
 
-# --- 8. データ追加・編集 ---
-elif selected == "データ追加・編集":
+elif selected == "データ編集":
     st.title("➕ データ追加・編集")
     tab_titles = ["📝 1. データの新規追加", "✏️ 2. データの編集・削除"]
 
@@ -1037,8 +611,7 @@ elif selected == "データ追加・編集":
                     st.success("データを削除しました。")
                     st.rerun()
 
-# --- 9. キャラクターデータモード ---
-elif selected == "キャラクターデータ":
+elif selected == "キャラ名鑑":
     st.title("🏴 キャラクター名鑑")
     st.caption("登録されているキャラクターの一覧・詳細情報を閲覧できます。")
     st.markdown("---")
@@ -1086,5 +659,5 @@ elif selected == "キャラクターデータ":
                         st.session_state["target_edit_global_index"] = orig_row_id
                         st.session_state["edit_active_tab"] = 1
                         st.session_state["data_edit_tab_radio"] = "✏️ 2. データの編集・削除"
-                        st.session_state["current_nav"] = "データ追加・編集"
+                        st.session_state["current_nav"] = "データ編集"
                         st.rerun()
