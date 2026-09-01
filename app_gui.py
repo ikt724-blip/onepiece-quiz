@@ -957,10 +957,9 @@ elif selected == "➕ データ追加・編集":
     # 他のページ（練習モード等）から遷移してきた際の活性化タブ判定
     default_tab_idx = st.session_state.get("edit_active_tab", 0)
 
-    # タブの作成
+    # タブの作成（ラジオボタンによる切替）
     tab_titles = ["📝 1. データの新規追加", "✏️ 2. データの編集・修正"]
     
-    # option_menu または st.tabs の切り替え制御
     tab_selection = st.radio(
         "操作を選択してください",
         tab_titles,
@@ -987,15 +986,30 @@ elif selected == "➕ データ追加・編集":
         if current_df.empty:
             st.info("編集対象のデータがありません。")
         else:
-            # 🚀 練習モードからのダイレクト遷移割り込み処理
+            # 🚀 練習モードや他ページからのダイレクト割り込み処理
+            target_idx = None
             if "target_edit_global_index" in st.session_state:
                 target_idx = st.session_state.pop("target_edit_global_index")
-                if target_idx is not None and 0 <= target_idx < len(current_df):
-                    # 検索フィルターを初期化して確実に対象インデックスを選択
-                    st.session_state["filter_story"] = "すべて"
-                    st.session_state["filter_type"] = "すべて"
-                    st.session_state["filter_keyword"] = ""
-                    st.session_state["edit_sub_idx"] = int(target_idx)
+            elif "edit_target_index" in st.session_state:
+                target_idx = st.session_state.pop("edit_target_index")
+
+            if target_idx is not None:
+                try:
+                    target_idx = int(target_idx)
+                    if 0 <= target_idx < len(current_df):
+                        # フィルターをすべてクリアして該当問題を直接選択
+                        st.session_state["filter_story"] = "すべて"
+                        st.session_state["filter_type"] = "すべて"
+                        st.session_state["filter_keyword"] = ""
+                        st.session_state["edit_sub_idx"] = target_idx
+                except (ValueError, TypeError):
+                    pass
+
+            # キャラ名鑑等からのキーワード連携対応
+            if "edit_search_keyword" in st.session_state and st.session_state["edit_search_keyword"]:
+                st.session_state["filter_keyword"] = st.session_state.pop("edit_search_keyword")
+                st.session_state["filter_story"] = "すべて"
+                st.session_state["filter_type"] = "すべて"
 
             st.markdown("##### 🔍 表示する問題を絞り込む")
             f_col1, f_col2, f_col3 = st.columns([2, 2, 3])
@@ -1039,12 +1053,14 @@ elif selected == "➕ データ追加・編集":
                 mask = filtered_df.astype(str).apply(lambda x: x.str.contains(keyword, case=False, na=False)).any(axis=1)
                 filtered_df = filtered_df[mask]
 
+            # 元のインデックス（全体の何番目か）を保持したままリセット
             filtered_df = filtered_df.reset_index(drop=False)
             filtered_count = len(filtered_df)
 
             if filtered_count == 0:
                 st.warning("条件に一致する問題が見つかりませんでした。")
             else:
+                # 選択中のインデックスが範囲外にならないよう制御
                 if "edit_sub_idx" not in st.session_state or st.session_state["edit_sub_idx"] >= filtered_count:
                     st.session_state["edit_sub_idx"] = 0
 
