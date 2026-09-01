@@ -500,7 +500,7 @@ elif selected == "📖 練習モード":
                 # 下段：メインアクションボタン（プライマリカラー＆フルサイズ）
                 if st.button("🚀 練習を開始する", type="primary", use_container_width=True):
                     target_df = df_all.copy()
-                    # 🚀 追加: 元のデータフレームでの行番号（ID）を記憶しておく
+                    # 🚀 元のデータフレームでの行番号（ID）を記憶しておく
                     target_df["_original_index"] = target_df.index
                     
                     if q_type_filter == "記述問題" and "type" in target_df.columns:
@@ -554,12 +554,33 @@ elif selected == "📖 練習モード":
                 c_top1, c_top2 = st.columns([3, 1])
                 with c_top1:
                     st.markdown(f"### 第 {curr_idx + 1} 問 / 全 {total_q} 問")
+                
+                # 🛠️ 修正箇所：ボタン遷移の連動処理を強化
                 with c_top2:
                     if st.button("🛠️ この問題を修正する", key=f"btn_edit_q_{curr_idx}"):
-                        # 🚀 修正: あいまいなキーワードではなく、問題の「絶対的なID番号」を編集モードに渡す
-                        st.session_state["edit_target_index"] = q.get("_original_index", 0)
+                        # 1. 練習モードの実行状態を一旦リセット
+                        st.session_state.practice_started = False
+                        
+                        # 2. 編集タブ（2番目）を開くフラグ
                         st.session_state["edit_active_tab"] = 1
-                        st.session_state["current_nav"] = "➕ データ追加・編集"
+                        
+                        # 3. 編集対象のインデックスを確実に取得
+                        target_id = q.get("_original_index")
+                        if target_id is None:
+                            target_id = q.get("index", curr_idx)
+                        st.session_state["edit_target_index"] = target_id
+                        
+                        # 4. menu_optionsから正確な表記を検索して遷移先にセット
+                        if "menu_options" in locals() or "menu_options" in globals():
+                            for option in menu_options:
+                                if "データ追加" in option or "編集" in option:
+                                    st.session_state["current_nav"] = option
+                                    break
+                            else:
+                                st.session_state["current_nav"] = "➕ データ追加・編集"
+                        else:
+                            st.session_state["current_nav"] = "➕ データ追加・編集"
+                        
                         st.rerun()
 
                 question_text, correct_ans_raw = format_question_and_answer(q)
@@ -649,7 +670,6 @@ elif selected == "📖 練習モード":
                 if st.button("練習を中断する"):
                     st.session_state.practice_started = False
                     st.rerun()
-
 # --- 3. 本番模試 ---
 elif selected == "🏆 本番模試（50問/60分）":
     st.subheader("🏆 ナレッジキング模擬試験（50問 / 制限時間60分）")
