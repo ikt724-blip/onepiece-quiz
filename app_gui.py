@@ -613,74 +613,88 @@ elif selected == "データ編集":
 
 elif selected == "キャラ名鑑":
     st.title("🏴 キャラクター名鑑")
-    st.caption("登録されているキャラクターの一覧・詳細情報を閲覧できます。")
+    st.caption("キャラクターを選択して、詳細情報と画像を確認できます。")
     st.markdown("---")
 
     if current_data.empty:
         st.info("登録されているデータがありません。")
     else:
-        search_kw = st.text_input("🔍 キャラクター検索", placeholder="名前・異名・所属など")
         char_df = current_data.copy()
         char_df["_orig_row_id"] = char_df.index
 
-        if search_kw:
-            mask = char_df.astype(str).apply(lambda x: x.str.contains(search_kw, case=False, na=False)).any(axis=1)
-            char_df = char_df[mask]
-
-        st.write(f"表示中のデータ件数: **{len(char_df)}** 件")
-        st.markdown("---")
-
-        cols = st.columns(3)
-        IMAGE_DIRS = ["images", "img", "static/images", "assets", "data/images", "."]
-
-        for idx, (_, row) in enumerate(char_df.iterrows()):
-            orig_row_id = int(row["_orig_row_id"])
-            c_name = get_clean_str(row.get("name") or row.get("名前") or row.get("question") or f"データ No.{orig_row_id + 1}")
-            c_nick = get_clean_str(row.get("nickname") or row.get("異名"))
-            
-            # 画像パスの解決処理（image, question_image, answer_image, 画像に対応）
-            resolved_img_path = None
-            for col in ["image", "question_image", "answer_image", "画像"]:
-                if col in row and pd.notna(row[col]):
-                    val = str(row[col]).strip()
-                    if val and val.lower() != "nan":
-                        raw_path = val.replace("\n", ",").split(",")[0].strip()
-                        if raw_path.startswith("http://") or raw_path.startswith("https://") or raw_path.startswith("data:image"):
-                            resolved_img_path = raw_path
-                            break
-                        elif os.path.exists(raw_path):
-                            resolved_img_path = raw_path
-                            break
-                        else:
-                            filename = os.path.basename(raw_path)
-                            for d in IMAGE_DIRS:
-                                test_path = os.path.join(d, filename)
-                                if os.path.exists(test_path):
-                                    resolved_img_path = test_path
-                                    break
-                        if resolved_img_path:
-                            break
-
+        def make_char_label(idx_row):
+            idx, row = idx_row
+            c_name = get_clean_str(row.get("name") or row.get("名前") or row.get("question") or f"データ No.{idx + 1}")
             c_aff = get_clean_str(row.get("affiliation") or row.get("所属"))
-            c_fruit = get_clean_str(row.get("devil_fruit") or row.get("悪魔の実") or row.get("answer"))
-            c_desc = get_clean_str(row.get("explanation") or row.get("解説"))
+            aff_str = f" ({c_aff})" if c_aff else ""
+            return f"{c_name}{aff_str} [No.{idx + 1}]"
 
-            with cols[idx % 3]:
-                with st.container(border=True):
+        char_options = list(char_df.iterrows())
+        if not char_options:
+            st.info("表示できるキャラクターがいません。")
+        else:
+            selected_char_tuple = st.selectbox(
+                "🔍 表示するキャラクターを選択",
+                options=char_options,
+                format_func=lambda x: make_char_label(x)
+            )
+
+            if selected_char_tuple:
+                _, row = selected_char_tuple
+                orig_row_id = int(row["_orig_row_id"])
+                
+                c_name = get_clean_str(row.get("name") or row.get("名前") or row.get("question") or f"データ No.{orig_row_id + 1}")
+                c_nick = get_clean_str(row.get("nickname") or row.get("異名"))
+                c_aff = get_clean_str(row.get("affiliation") or row.get("所属"))
+                c_fruit = get_clean_str(row.get("devil_fruit") or row.get("悪魔の実") or row.get("answer"))
+                c_desc = get_clean_str(row.get("explanation") or row.get("解説"))
+
+                # 画像パスの解決
+                resolved_img_path = None
+                IMAGE_DIRS = ["images", "img", "static/images", "assets", "data/images", "."]
+                for col in ["image", "question_image", "answer_image", "画像"]:
+                    if col in row and pd.notna(row[col]):
+                        val = str(row[col]).strip()
+                        if val and val.lower() != "nan":
+                            raw_path = val.replace("\n", ",").split(",")[0].strip()
+                            if raw_path.startswith("http://") or raw_path.startswith("https://") or raw_path.startswith("data:image"):
+                                resolved_img_path = raw_path
+                                break
+                            elif os.path.exists(raw_path):
+                                resolved_img_path = raw_path
+                                break
+                            else:
+                                filename = os.path.basename(raw_path)
+                                for d in IMAGE_DIRS:
+                                    test_path = os.path.join(d, filename)
+                                    if os.path.exists(test_path):
+                                        resolved_img_path = test_path
+                                        break
+                            if resolved_img_path:
+                                break
+
+                st.markdown("---")
+                col_img, col_info = st.columns([1, 2])
+
+                with col_img:
                     if resolved_img_path:
                         st.image(resolved_img_path, use_container_width=True)
                     else:
-                        st.caption("🖼️ 画像なし")
+                        st.info("🖼️ 画像なし")
 
-                    st.markdown(f"### {c_name}")
-                    if c_nick: st.caption(f"【異名】{c_nick}")
-                    st.markdown("---")
-                    if c_aff: st.write(f"**🏴 所属:** {c_aff}")
-                    if c_fruit: st.write(f"**🍈 能力/解答:** {c_fruit}")
+                with col_info:
+                    st.markdown(f"## {c_name}")
+                    if c_nick:
+                        st.markdown(f"**異名:** {c_nick}")
+                    if c_aff:
+                        st.markdown(f"**所属:** {c_aff}")
+                    if c_fruit:
+                        st.markdown(f"**悪魔の実/能力:** {c_fruit}")
                     if c_desc:
-                        with st.expander("📝 詳細・解説"): st.write(c_desc)
+                        st.markdown(f"**詳細・解説:**\n{c_desc}")
 
-                    if st.button("✏️ このデータを編集", key=f"btn_edit_char_{orig_row_id}", use_container_width=True):
+                    st.markdown("")
+                    if st.button("✏️ このデータを編集する", key=f"btn_edit_char_{orig_row_id}", type="primary"):
                         st.session_state["target_edit_global_index"] = orig_row_id
                         st.session_state["edit_active_tab"] = 1
                         st.session_state["data_edit_tab_radio"] = "✏️ 2. データの編集・削除"
