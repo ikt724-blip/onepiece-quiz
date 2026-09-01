@@ -182,12 +182,8 @@ current_data = st.session_state.get("working_df", pd.DataFrame())
 
 # --- 画面制御 ---
 if selected == "ホーム":
-    st.title("🏠 ホーム画面")
-    st.write("メニューからプレイしたいモードを選択してください。")
 
 elif selected == "練習モード":
-    st.title("📖 練習モード")
-    st.write("ここは練習モードです。")
 
 elif selected == "本番模試":
     st.title("🏆 本番模試 (50問 / 60分)")
