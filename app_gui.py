@@ -613,26 +613,45 @@ elif selected == "データ編集":
 
 elif selected == "キャラ名鑑":
     st.title("🏴 キャラクター名鑑")
-    st.caption("キャラクターを選択して、詳細情報と画像を確認できます。")
+    st.caption("検索または選択して、キャラクターの詳細情報と画像を確認できます。")
     st.markdown("---")
 
     if current_data.empty:
         st.info("登録されているデータがありません。")
     else:
+        # 検索ボックスの追加
+        search_keyword = st.text_input("🔍 キャラクター検索（名前・所属・問題文などで絞り込み）", placeholder="例: ルフィ、海賊団 など")
+
         char_df = current_data.copy()
         char_df["_orig_row_id"] = char_df.index
 
-        def make_char_label(idx_row):
-            idx, row = idx_row
-            c_name = get_clean_str(row.get("name") or row.get("名前") or row.get("question") or f"データ No.{idx + 1}")
-            c_aff = get_clean_str(row.get("affiliation") or row.get("所属"))
-            aff_str = f" ({c_aff})" if c_aff else ""
-            return f"{c_name}{aff_str} [No.{idx + 1}]"
+        # 検索キーワードによる絞り込み
+        if search_keyword:
+            mask = char_df.astype(str).apply(lambda x: x.str.contains(search_keyword, case=False, na=False)).any(axis=1)
+            char_df = char_df[mask]
 
-        char_options = list(char_df.iterrows())
-        if not char_options:
-            st.info("表示できるキャラクターがいません。")
+        if char_df.empty:
+            st.warning("条件に一致するキャラクターが見つかりません。")
         else:
+            def make_char_label(idx_row):
+                _, row = idx_row
+                orig_id = int(row["_orig_row_id"])
+                
+                # 複数候補から確実に名前を取得する
+                c_name = ""
+                for col in ["name", "名前", "キャラ名", "Name", "question", "問題"]:
+                    val = get_clean_str(row.get(col))
+                    if val:
+                        c_name = val
+                        break
+                if not c_name:
+                    c_name = f"データ No.{orig_id + 1}"
+                
+                c_aff = get_clean_str(row.get("affiliation") or row.get("所属"))
+                aff_str = f" ({c_aff})" if c_aff else ""
+                return f"{c_name}{aff_str} [No.{orig_id + 1}]"
+
+            char_options = list(char_df.iterrows())
             selected_char_tuple = st.selectbox(
                 "🔍 表示するキャラクターを選択",
                 options=char_options,
@@ -643,10 +662,19 @@ elif selected == "キャラ名鑑":
                 _, row = selected_char_tuple
                 orig_row_id = int(row["_orig_row_id"])
                 
-                c_name = get_clean_str(row.get("name") or row.get("名前") or row.get("question") or f"データ No.{orig_row_id + 1}")
-                c_nick = get_clean_str(row.get("nickname") or row.get("異名"))
-                c_aff = get_clean_str(row.get("affiliation") or row.get("所属"))
-                c_fruit = get_clean_str(row.get("devil_fruit") or row.get("悪魔の実") or row.get("answer"))
+                # 名前の取得を堅牢化
+                c_name = ""
+                for col in ["name", "名前", "キャラ名", "Name", "question", "問題"]:
+                    val = get_clean_str(row.get(col))
+                    if val:
+                        c_name = val
+                        break
+                if not c_name:
+                    c_name = f"データ No.{orig_row_id + 1}"
+
+                c_nick = get_clean_str(row.get("nickname") or row.get("異名") or row.get("通り名"))
+                c_aff = get_clean_str(row.get("affiliation") or row.get("所属") or row.get("組織"))
+                c_fruit = get_clean_str(row.get("devil_fruit") or row.get("悪魔の実") or row.get("answer") or row.get("解答"))
                 c_desc = get_clean_str(row.get("explanation") or row.get("解説"))
 
                 # 画像パスの解決
