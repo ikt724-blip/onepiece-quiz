@@ -43,6 +43,10 @@ df_all = load_all_data()
 if "working_df" not in st.session_state or st.session_state["working_df"].empty:
     st.session_state["working_df"] = df_all.copy().reset_index(drop=True)
 
+# 苦手問題管理用のリスト（間違えた問題のインデックスを保持）
+if "wrong_q_indices" not in st.session_state:
+    st.session_state["wrong_q_indices"] = set()
+
 # 共通ヘルパー関数
 def get_clean_str(val):
     if pd.isna(val) or val is None:
@@ -78,7 +82,6 @@ def display_question_image(row, width=200, show_caption=True):
                         img_sources.append(cleaned_path)
 
     if not img_sources:
-        st.info("📷 画像データなし")
         return
 
     for idx, raw_path in enumerate(img_sources):
@@ -104,10 +107,8 @@ def display_question_image(row, width=200, show_caption=True):
         if resolved_path:
             try:
                 st.image(resolved_path, caption=cap, width=width)
-            except Exception as e:
-                st.warning(f"⚠️ 画像表示エラー: {e}")
-        else:
-            st.info(f"📷 画像が見つかりません: `{raw_path}`")
+            except Exception:
+                pass
 
 def get_correct_answers_list(q, correct_ans_str):
     answers = []
@@ -127,7 +128,7 @@ def get_correct_answers_list(q, correct_ans_str):
 def check_answers_multi(user_inputs, correct_answers):
     user_clean = [str(u).strip() for u in user_inputs if str(u).strip()]
     correct_clean = [str(c).strip() for c in correct_answers if str(c).strip()]
-    if len(user_clean) != len(correct_clean):
+    if not user_clean or len(user_clean) != len(correct_clean):
         return False
     return set(user_clean) == set(correct_clean)
 
@@ -149,15 +150,15 @@ def format_question_and_answer(q):
     if name: return "このキャラクターの名前は？", name
     return "このキャラクターの名前は？", name
 
-# --- 2. サイドバーナビゲーション連動修復 ---
+# --- 2. サイドバーナビゲーション（二重表示修復済） ---
 menu_options = [
     "ホーム",
-    "📖 練習モード",
-    "🏆 本番模試（50問/60分）",
-    "🔥 苦手克服",
-    "🔍 AI検索モード",
-    "➕ データ追加・編集",
-    "🏴‍☠️ キャラクターデータ",
+    "練習モード",
+    "本番模試 (50問/60分)",
+    "苦手克服",
+    "AI検索モード",
+    "データ追加・編集",
+    "キャラクターデータ",
 ]
 
 if "current_nav" not in st.session_state or st.session_state["current_nav"] not in menu_options:
@@ -172,11 +173,10 @@ with st.sidebar:
         options=menu_options,
         icons=["house", "book", "trophy", "exclamation-triangle", "search", "plus-circle", "flag"],
         default_index=def_idx,
-        key=f"menu_nav_state_{st.session_state['current_nav']}", # 強制同期用キー
+        key=f"menu_nav_state_{st.session_state['current_nav']}",
     )
     st.session_state["current_nav"] = selected
 
-# 最新の作業用データフレームを参照
 current_data = st.session_state["working_df"]
 
 # --- 3. ホーム画面 ---
@@ -241,7 +241,7 @@ if selected == "ホーム":
         st.warning("表示できる画像ファイルが見つかりません。")
 
 # --- 4. 練習モード ---
-elif selected == "📖 練習モード":
+elif selected == "練習モード":
     st.title("📖 練習モード")
     st.caption("自分のペースで苦手克服！出題条件を自由にカスタマイズして挑戦しましょう。")
     st.write("---")
@@ -305,7 +305,7 @@ elif selected == "📖 練習モード":
                         st.session_state["target_edit_global_index"] = q.get("_original_index", curr_idx)
                         st.session_state["edit_active_tab"] = 1
                         st.session_state["data_edit_tab_radio"] = "✏️ 2. データの編集・削除"
-                        st.session_state["current_nav"] = "➕ データ追加・編集"
+                        st.session_state["current_nav"] = "データ追加・編集"
                         st.rerun()
 
                 question_text, correct_ans_raw = format_question_and_answer(q)
@@ -330,11 +330,14 @@ elif selected == "📖 練習モード":
                 if submitted:
                     is_correct = check_answers_multi(user_inputs, correct_list)
                     disp_ans = "、".join(correct_list)
+                    orig_idx = q.get("_original_index")
                     if is_correct:
                         st.success("⭕ 正解！")
                         st.session_state.p_score += 1
+                        if orig_idx is not None: st.session_state["wrong_q_indices"].discard(orig_idx)
                     else:
                         st.error(f"❌ 不正解... 正解は: **{disp_ans}**")
+                        if orig_idx is not None: st.session_state["wrong_q_indices"].add(orig_idx)
 
                     exp = get_clean_str(q.get("explanation") or q.get("解説"))
                     if exp: st.caption(f"💡 【解説】: {exp}")
@@ -346,8 +349,11 @@ elif selected == "📖 練習モード":
                     st.rerun()
 
 # --- 5. 本番模試 ---
-elif selected == "🏆 本番模試（50問/60分）":
-    st.subheader("🏆 ナレッジキング模擬試験（50問 / 制限時間60分）")
+elif selected == "本番模試 (50問/60分)":
+    st.title("🏆 本番模試（50問 / 60分）")
+    st.caption("本番同様の制限時間で挑戦！全データからランダム出題されます。")
+    st.write("---")
+
     if current_data.empty:
         st.warning("出題できるデータが見つかりません。")
     else:
@@ -359,8 +365,10 @@ elif selected == "🏆 本番模試（50問/60分）":
 
         if not st.session_state.exam_started:
             st.info("全データからランダムで **50問** 出題されます。制限時間は **60分** です。")
-            if st.button("🔥 模試を開始する（タイマースタート）", use_container_width=True):
-                shuffled = current_data.sample(n=min(50, len(current_data))).reset_index(drop=True)
+            if st.button("🔥 模試を開始する（タイマースタート）", type="primary", use_container_width=True):
+                target_df = current_data.copy()
+                target_df["_original_index"] = target_df.index
+                shuffled = target_df.sample(n=min(50, len(target_df))).reset_index(drop=True)
                 st.session_state.e_quiz_list = shuffled.to_dict("records")
                 st.session_state.e_curr_idx = 0
                 st.session_state.e_user_answers = {}
@@ -389,12 +397,18 @@ elif selected == "🏆 本番模試（50問/60分）":
                     correct_list = get_correct_answers_list(q_item, c_ans_raw)
                     u_ans_list = st.session_state.e_user_answers.get(idx, [])
                     is_c = check_answers_multi(u_ans_list, correct_list)
-                    if is_c: score += 1
+                    orig_idx = q_item.get("_original_index")
+                    if is_c:
+                        score += 1
+                        if orig_idx is not None: st.session_state["wrong_q_indices"].discard(orig_idx)
+                    else:
+                        if orig_idx is not None: st.session_state["wrong_q_indices"].add(orig_idx)
+                        
                     summary_data.append({"問": idx + 1, "問題文": q_txt, "あなたの解答": "、".join(u_ans_list), "正解": "、".join(correct_list), "判定": "⭕ 正解" if is_c else "❌ 不正解"})
 
                 st.markdown(f"### 最終得点: **{score}** / {total_q} 問 (正答率: {int(score/total_q*100)}%)")
                 st.dataframe(pd.DataFrame(summary_data), use_container_width=True)
-                if st.button("🔄 もう一度模試を受ける"):
+                if st.button("🔄 もう一度模試を受ける", type="primary"):
                     st.session_state.exam_started = False
                     st.rerun()
             else:
@@ -404,23 +418,82 @@ elif selected == "🏆 本番模試（50問/60分）":
                 st.info(f"**【問題】**\n{question_text}")
                 display_question_image(q, show_caption=False)
 
-                correct_list = get_correct_answers_list(q, correct_ans_raw)
                 with st.form(f"exam_form_{curr_idx}"):
-                    curr_inputs = [st.text_input("解答を入力", key=f"e_ans_{curr_idx}")]
+                    curr_input = st.text_input("解答を入力", key=f"e_ans_{curr_idx}")
                     sub_next = st.form_submit_button("回答して次の問題へ ➡", use_container_width=True)
 
                 if sub_next:
-                    st.session_state.e_user_answers[curr_idx] = curr_inputs
+                    st.session_state.e_user_answers[curr_idx] = [curr_input]
                     st.session_state.e_curr_idx += 1
                     st.rerun()
 
 # --- 6. 苦手克服 ---
-elif selected == "🔥 苦手克服":
-    st.subheader("🔥 苦手克服モード")
-    st.info("間違えた問題やチェックした問題を重点的に復習できます。")
+elif selected == "苦手克服":
+    st.title("🔥 苦手克服モード")
+    st.caption("練習モードや本番模試で間違えた問題だけをまとめて集中復習！")
+    st.write("---")
+
+    wrong_indices = list(st.session_state.get("wrong_q_indices", set()))
+    
+    if not wrong_indices:
+        st.success("🎉 現在、登録されている苦手問題はありません！順調です！")
+    else:
+        st.warning(f"現在 **{len(wrong_indices)} 問** の苦手問題が登録されています。")
+        
+        if "review_started" not in st.session_state: st.session_state.review_started = False
+        if "r_curr_idx" not in st.session_state: st.session_state.r_curr_idx = 0
+        if "r_quiz_list" not in st.session_state: st.session_state.r_quiz_list = []
+
+        if not st.session_state.review_started:
+            if st.button("🔥 苦手問題の復習を開始する", type="primary", use_container_width=True):
+                wrong_df = current_data.iloc[wrong_indices].copy()
+                wrong_df["_original_index"] = wrong_df.index
+                st.session_state.r_quiz_list = wrong_df.to_dict("records")
+                st.session_state.r_curr_idx = 0
+                st.session_state.review_started = True
+                st.rerun()
+        else:
+            total_q = len(st.session_state.r_quiz_list)
+            curr_idx = st.session_state.r_curr_idx
+
+            if curr_idx >= total_q:
+                st.balloons()
+                st.markdown("## 🎉 苦手克服トレーニング完了！")
+                if st.button("🔄 ホームへ戻る", type="primary"):
+                    st.session_state.review_started = False
+                    st.rerun()
+            else:
+                q = st.session_state.r_quiz_list[curr_idx]
+                st.progress((curr_idx) / total_q)
+                st.markdown(f"### 苦手復習 第 {curr_idx + 1} 問 / 全 {total_q} 問")
+
+                question_text, correct_ans_raw = format_question_and_answer(q)
+                st.info(f"**【問題】**\n{question_text}")
+                display_question_image(q, show_caption=False)
+
+                correct_list = get_correct_answers_list(q, correct_ans_raw)
+
+                with st.form(f"review_form_{curr_idx}"):
+                    u_input = st.text_input("解答を入力", key=f"r_ans_{curr_idx}")
+                    sub_rev = st.form_submit_button("回答する", use_container_width=True)
+
+                if sub_rev:
+                    is_correct = check_answers_multi([u_input], correct_list)
+                    disp_ans = "、".join(correct_list)
+                    orig_idx = q.get("_original_index")
+                    if is_correct:
+                        st.success("⭕ 克服成功！苦手リストから削除しました。")
+                        if orig_idx is not None: st.session_state["wrong_q_indices"].discard(orig_idx)
+                    else:
+                        st.error(f"❌ 残念... 正解は: **{disp_ans}**")
+
+                    exp = get_clean_str(q.get("explanation") or q.get("解説"))
+                    if exp: st.caption(f"💡 【解説】: {exp}")
+                    st.session_state.r_curr_idx += 1
+                    st.button("次へ ➡")
 
 # --- 7. AI検索モード ---
-elif selected == "🔍 AI検索モード":
+elif selected == "AI検索モード":
     st.title("🔍 AI検索モード")
     st.caption("〜 キャラクターマスタ＆問題データベース 爆速逆引き図鑑 〜")
     st.write("---")
@@ -434,10 +507,11 @@ elif selected == "🔍 AI検索モード":
             mask = filtered_df.astype(str).apply(lambda x: x.str.contains(search_query, case=False, na=False)).any(axis=1)
             filtered_df = filtered_df[mask]
 
+        st.markdown(f"検索結果: **{len(filtered_df)}** 件")
         st.dataframe(filtered_df, use_container_width=True)
 
 # --- 8. データ追加・編集 ---
-elif selected == "➕ データ追加・編集":
+elif selected == "データ追加・編集":
     st.title("➕ データ追加・編集")
     tab_titles = ["📝 1. データの新規追加", "✏️ 2. データの編集・削除"]
 
@@ -454,7 +528,6 @@ elif selected == "➕ データ追加・編集":
 
     tab_selection = st.radio("操作を選択してください", tab_titles, key="data_edit_tab_radio", horizontal=True)
 
-    # 1. 新規追加
     if tab_selection == "📝 1. データの新規追加":
         st.subheader("📝 新しい問題データの追加")
         type_options = ["一問一答", "一問多答", "順序選択", "6文字並べ替え", "組み合わせ", "自由記述"]
@@ -465,24 +538,7 @@ elif selected == "➕ データ追加・編集":
             new_story = st.text_input("【ストーリー（編・章）】", placeholder="例: アラバスタ編")
             q_img_file = st.file_uploader("🖼️ 問題用画像（任意）", type=["png", "jpg", "jpeg", "webp"])
             
-            new_answer = ""
-            new_options = {}
-
-            if selected_type == "一問一答":
-                opt1 = st.text_input("選択肢 1*")
-                opt2 = st.text_input("選択肢 2*")
-                opt3 = st.text_input("選択肢 3*")
-                opt4 = st.text_input("選択肢 4*")
-                ans_target = st.radio("正解", [opt1, opt2, opt3, opt4])
-                new_answer = ans_target
-                new_options = {"option1": opt1, "option2": opt2, "option3": opt3, "option4": opt4}
-
-            elif selected_type == "自由記述":
-                new_answer = st.text_input("正解の解答文字列*")
-
-            else:
-                new_answer = st.text_input("解答・正解*")
-
+            new_answer = st.text_input("解答・正解*")
             new_explanation = st.text_area("【解説】")
             submit_btn = st.form_submit_button("➕ 新規問題を保存して追加", use_container_width=True)
 
@@ -504,13 +560,11 @@ elif selected == "➕ データ追加・編集":
                         "image": final_q_img,
                         "story": new_story
                     }
-                    new_entry.update(new_options)
 
                     st.session_state["working_df"] = pd.concat([st.session_state["working_df"], pd.DataFrame([new_entry])], ignore_index=True)
                     st.success("新しい問題データを追加しました！")
                     st.rerun()
 
-    # 2. 編集・削除
     elif tab_selection == "✏️ 2. データの編集・削除":
         st.subheader("🛠️ 問題修正・削除フォーム")
         
@@ -556,7 +610,7 @@ elif selected == "➕ データ追加・編集":
                     st.rerun()
 
 # --- 9. キャラクターデータモード ---
-elif selected == "🏴‍☠️ キャラクターデータ":
+elif selected == "キャラクターデータ":
     st.title("🏴 キャラクター名鑑")
     st.caption("登録されているキャラクターの一覧・詳細情報を閲覧できます。")
     st.markdown("---")
@@ -604,5 +658,5 @@ elif selected == "🏴‍☠️ キャラクターデータ":
                         st.session_state["target_edit_global_index"] = orig_row_id
                         st.session_state["edit_active_tab"] = 1
                         st.session_state["data_edit_tab_radio"] = "✏️ 2. データの編集・削除"
-                        st.session_state["current_nav"] = "➕ データ追加・編集"
+                        st.session_state["current_nav"] = "データ追加・編集"
                         st.rerun()
