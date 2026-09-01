@@ -311,13 +311,129 @@ elif selected == "AI検索":
         st.markdown(f"検索結果: **{len(filtered_df)}** 件")
         st.dataframe(filtered_df, use_container_width=True)
 
+elif selected == "苦手克服":
+    st.title("🔥 苦手克服モード")
+    st.caption("練習モードや本番模試で間違えた問題だけを集中して復習できます。")
+    st.write("---")
+
+    # セッションから苦手問題のインデックスを取得
+    wrong_indices = list(st.session_state.get("wrong_q_indices", set()))
+    
+    if not wrong_indices:
+        st.success("🎉 現在、登録されている苦手問題はありません！順調なペースです。")
+    else:
+        st.warning(f"現在 **{len(wrong_indices)} 問** の苦手問題が記録されています。")
+        
+        if "review_started" not in st.session_state:
+            st.session_state.review_started = False
+        if "r_curr_idx" not in st.session_state:
+            st.session_state.r_curr_idx = 0
+        if "r_quiz_list" not in st.session_state:
+            st.session_state.r_quiz_list = []
+
+        if not st.session_state.review_started:
+            if st.button("🔥 苦手問題の復習を開始する", type="primary", use_container_width=True):
+                # 苦手問題のみを抽出
+                wrong_df = current_data.iloc[wrong_indices].copy()
+                wrong_df["_original_index"] = wrong_df.index
+                st.session_state.r_quiz_list = wrong_df.to_dict("records")
+                st.session_state.r_curr_idx = 0
+                st.session_state.review_started = True
+                st.rerun()
+        else:
+            total_q = len(st.session_state.r_quiz_list)
+            curr_idx = st.session_state.r_curr_idx
+
+            if curr_idx >= total_q:
+                st.balloons()
+                st.markdown("## 🎉 苦手克服トレーニング完了！")
+                if st.button("🔄 モード選択へ戻る", type="primary"):
+                    st.session_state.review_started = False
+                    st.rerun()
+            else:
+                q = st.session_state.r_quiz_list[curr_idx]
+                st.progress((curr_idx) / total_q)
+                st.markdown(f"### 苦手復習 第 {curr_idx + 1} 問 / 全 {total_q} 問")
+
+                question_text, correct_ans_raw = format_question_and_answer(q)
+                st.info(f"**【問題】**\n{question_text}")
+                display_question_image(q, show_caption=False)
+
+                correct_list = get_correct_answers_list(q, correct_ans_raw)
+
+                with st.form(f"review_form_{curr_idx}"):
+                    u_input = st.text_input("解答を入力", key=f"r_ans_{curr_idx}")
+                    sub_rev = st.form_submit_button("回答する", use_container_width=True)
+
+                if sub_rev:
+                    is_correct = check_answers_multi([u_input], correct_list)
+                    disp_ans = "、".join(correct_list)
+                    orig_idx = q.get("_original_index")
+                    
+                    if is_correct:
+                        st.success("⭕ 正解！苦手リストから解除されました。")
+                        if orig_idx is not None:
+                            st.session_state["wrong_q_indices"].discard(orig_idx)
+                    else:
+                        st.error(f"❌ 不正解... 正解は: **{disp_ans}**")
+
+                    exp = get_clean_str(q.get("explanation") or q.get("解説"))
+                    if exp:
+                        st.caption(f"💡 【解説】: {exp}")
+                    
+                    st.session_state.r_curr_idx += 1
+                    st.button("次の問題へ ➡")
+
+
 elif selected == "データ編集":
     st.title("✏️ データ追加・編集")
-    st.write("ここはデータ編集モードです。")
+    st.caption("問題データの新規追加や修正を行えます。")
+    st.write("---")
+
+    if current_data.empty:
+        st.warning("⚠️ データが見つかりません。")
+    else:
+        st.subheader("データ一覧")
+        st.dataframe(current_data, use_container_width=True)
+
 
 elif selected == "キャラ名鑑":
     st.title("🏴 キャラクター名鑑")
-    st.write("ここはキャラ名鑑です。")
+    st.caption("登録されている全キャラクターをカード形式で一覧表示します。")
+    st.write("---")
+
+    if current_data.empty:
+        st.warning("⚠️ 表示できるキャラデータがありません。")
+    else:
+        search_kw = st.text_input("🔍 キャラクター検索", "", placeholder="名前、異名、所属などで絞り込み")
+        char_df = current_data.copy()
+
+        if search_kw.strip():
+            mask = char_df.astype(str).apply(lambda x: x.str.contains(search_kw.strip(), case=False, na=False)).any(axis=1)
+            char_df = char_df[mask]
+
+        st.caption(f"該当件数: **{len(char_df)}** 件")
+        
+        # グリッド表示 (3列)
+        cols = st.columns(3)
+        for idx, (_, row) in enumerate(char_df.head(60).iterrows()): # 動作を軽くするため60件表示制限
+            c_name = get_clean_str(row.get("name") or row.get("名前") or row.get("question") or f"No.{idx + 1}")
+            c_nick = get_clean_str(row.get("nickname") or row.get("異名"))
+            c_img = get_clean_str(row.get("image") or row.get("画像"))
+            c_aff = get_clean_str(row.get("affiliation") or row.get("所属"))
+            c_fruit = get_clean_str(row.get("devil_fruit") or row.get("悪魔の実") or row.get("answer"))
+
+            with cols[idx % 3]:
+                with st.container(border=True):
+                    if c_img:
+                        st.image(c_img, use_container_width=True)
+                    st.markdown(f"**{c_name}**")
+                    if c_nick:
+                        st.caption(f"【{c_nick}】")
+                    if c_aff:
+                        st.caption(f"🏴 {c_aff}")
+                    if c_fruit:
+                        st.caption(f"🍈 {c_fruit}")
 
 # --- 3. ホーム画面 ---
 if selected == "ホーム":
