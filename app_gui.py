@@ -954,20 +954,25 @@ elif selected == "🔍 AI検索モード":
 elif selected == "➕ データ追加・編集":
     st.title("➕ データ追加・編集")
 
-    # 他のページ（練習モード等）から遷移してきた際の活性化タブ判定
-    default_tab_idx = st.session_state.get("edit_active_tab", 0)
+    # 他のページ（練習モード等）から遷移してきた際のタブ強制切替処理
+    tab_titles = ["📝 1. データの新規追加", "✏️ 2. データの編集・削除"]
+
+    if "edit_active_tab" in st.session_state:
+        req_tab = st.session_state.pop("edit_active_tab")
+        if isinstance(req_tab, int) and 0 <= req_tab < len(tab_titles):
+            # ラジオボタンの状態キー（data_edit_tab_radio）を直接指定して上書き
+            st.session_state["data_edit_tab_radio"] = tab_titles[req_tab]
+
+    # デフォルトの選択肢を安全に指定
+    default_selected = st.session_state.get("data_edit_tab_radio", tab_titles[0])
+    if default_selected not in tab_titles:
+        default_selected = tab_titles[0]
 
     # タブの作成（ラジオボタンによる切替）
-    tab_titles = ["📝 1. データの新規追加", "✏️ 2. データの編集・削除"]
-    
-    # default_tab_idx が範囲外にならないよう制御
-    if default_tab_idx >= len(tab_titles):
-        default_tab_idx = 0
-
     tab_selection = st.radio(
         "操作を選択してください",
         tab_titles,
-        index=default_tab_idx,
+        index=tab_titles.index(default_selected),
         horizontal=True,
         key="data_edit_tab_radio"
     )
@@ -1085,7 +1090,7 @@ elif selected == "➕ データ追加・編集":
                         q_text = "（問題文なし）"
                     return f"【No.{orig_num}】 {q_text[:35]}..."
 
-                # セレクトボックス（keyの衝突を防ぐため index 引数で安全制御）
+                # セレクトボックス（index引数で初期位置指定）
                 selected_pos = st.selectbox(
                     f"編集・削除する問題を選択（全 {filtered_count} 件）",
                     options=list(range(filtered_count)),
@@ -1129,7 +1134,6 @@ elif selected == "➕ データ追加・編集":
                         st.session_state["working_df"] = st.session_state["working_df"].drop(index=orig_index).reset_index(drop=True)
                         st.success(f"問題 No.{orig_index + 1} を削除しました。")
                         st.rerun()
-
 # --- 7. キャラクターデータモード ---
 elif selected == "🏴 キャラクターデータ":
     st.title("🏴 キャラクター名鑑")
