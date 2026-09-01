@@ -182,7 +182,193 @@ current_data = st.session_state.get("working_df", pd.DataFrame())
 
 # --- 画面制御 ---
 if selected == "ホーム":
-    render_home_hero()
+    import streamlit.components.v1 as components
+
+    all_imgs = (
+        glob.glob("images/*.png")
+        + glob.glob("images/*.jpg")
+        + glob.glob("images/*.jpeg")
+        + glob.glob("*.png")
+        + glob.glob("*.jpg")
+    )
+
+    wt100_full_html = ""
+
+    if all_imgs:
+        sample_imgs = random.sample(all_imgs, min(len(all_imgs), 60))
+        
+        NUM_COLS = 6
+        columns_b64 = [[] for _ in range(NUM_COLS)]
+        
+        img_idx = 0
+        for img_path in sample_imgs:
+            if os.path.exists(img_path):
+                b64_str = image_to_base64(img_path)
+                if b64_str:
+                    columns_b64[img_idx % NUM_COLS].append(b64_str)
+                    img_idx += 1
+
+        cols_html_list = []
+        for i, col_imgs in enumerate(columns_b64):
+            if not col_imgs:
+                continue
+            duplicated_imgs = col_imgs + col_imgs
+            imgs_tags = "".join([f'<div class="img-box"><img src="{b64}" class="scroll-img" /></div>' for b64 in duplicated_imgs])
+            
+            col_class = "col-down" if i % 2 == 0 else "col-up"
+            speed_class = f"speed-{(i % 3) + 1}"
+            
+            col_block = f'''
+            <div class="scroll-column {col_class} {speed_class}">
+                <div class="scroll-track">
+                    {imgs_tags}
+                </div>
+            </div>
+            '''
+            cols_html_list.append(col_block)
+
+        cols_html = "".join(cols_html_list)
+
+        wt100_full_html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+        <style>
+        * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+        html, body {{
+            width: 100%;
+            height: 100%;
+            background-color: #0e1117;
+            font-family: sans-serif;
+            overflow: hidden;
+        }}
+
+        .wt-hero-container {{
+            position: relative;
+            width: 100%;
+            height: 600px;
+            background-color: #000;
+            overflow: hidden;
+            border-radius: 12px;
+        }}
+
+        .scroll-wrapper {{
+            display: flex;
+            width: 100%;
+            height: 100%;
+            gap: 4px;
+            opacity: 0.85;
+            background-color: #000;
+        }}
+
+        .scroll-column {{
+            flex: 1;
+            height: 100%;
+            overflow: hidden;
+            position: relative;
+        }}
+
+        .scroll-track {{
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            width: 100%;
+        }}
+
+        .img-box {{
+            width: 100%;
+            height: 130px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #111;
+            border-radius: 4px;
+            overflow: hidden;
+        }}
+
+        .scroll-img {{
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            display: block;
+        }}
+
+        @keyframes scrollDown {{
+            0% {{ transform: translateY(-50%); }}
+            100% {{ transform: translateY(0%); }}
+        }}
+
+        @keyframes scrollUp {{
+            0% {{ transform: translateY(0%); }}
+            100% {{ transform: translateY(-50%); }}
+        }}
+
+        .col-down .scroll-track {{ animation: scrollDown linear infinite; }}
+        .col-up .scroll-track {{ animation: scrollUp linear infinite; }}
+
+        .speed-1 .scroll-track {{ animation-duration: 22s; }}
+        .speed-2 .scroll-track {{ animation-duration: 28s; }}
+        .speed-3 .scroll-track {{ animation-duration: 34s; }}
+
+        .wt-overlay {{
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+            pointer-events: none;
+            background: radial-gradient(circle, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.85) 100%);
+        }}
+
+        .wt-title {{
+            text-align: center;
+            color: #fff;
+            text-shadow: 0 4px 20px rgba(0,0,0,0.95), 0 0 25px rgba(255, 0, 0, 0.8);
+        }}
+
+        .wt-title h1 {{
+            font-size: 2.6rem;
+            font-weight: 900;
+            margin: 0;
+            letter-spacing: 2px;
+            color: #ffffff;
+        }}
+
+        .wt-title p {{
+            font-size: 1.1rem;
+            color: #ff3b30;
+            font-weight: bold;
+            margin-top: 8px;
+        }}
+        </style>
+        </head>
+        <body>
+            <div class="wt-hero-container">
+                <div class="scroll-wrapper">
+                    {cols_html}
+                </div>
+                <div class="wt-overlay">
+                    <div class="wt-title">
+                        <h1>🏴‍☠️ ONE PIECE ナレッジキング対策</h1>
+                        <p>― 最強のデータベースを脳に刻め ―</p>
+                    </div>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+
+    if wt100_full_html:
+        components.html(wt100_full_html, height=620)
+    else:
+        st.warning("表示できる画像ファイル（.png / .jpg）が見つかりません。")
+
+    st.divider()
 
 elif selected == "練習モード":
     st.title("📖 練習モード")
