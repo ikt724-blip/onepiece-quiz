@@ -954,41 +954,72 @@ elif selected == "🔍 AI検索モード":
 elif selected == "➕ データ追加・編集":
     st.title("➕ データ追加・編集")
 
-    # 他のページ（練習モード等）から遷移してきた際のタブ強制切替処理
+    # データをセッション状態で保持
+    if "working_df" not in st.session_state or st.session_state["working_df"].empty:
+        st.session_state["working_df"] = df_all.copy().reset_index(drop=True)
+
     tab_titles = ["📝 1. データの新規追加", "✏️ 2. データの編集・削除"]
 
+    # 🚀 他ページからの遷移リクエストを【描画前】に即座にラジオボタンの状態へ反映
     if "edit_active_tab" in st.session_state:
         req_tab = st.session_state.pop("edit_active_tab")
         if isinstance(req_tab, int) and 0 <= req_tab < len(tab_titles):
-            # ラジオボタンの状態キー（data_edit_tab_radio）を直接指定して上書き
             st.session_state["data_edit_tab_radio"] = tab_titles[req_tab]
 
-    # デフォルトの選択肢を安全に指定
-    default_selected = st.session_state.get("data_edit_tab_radio", tab_titles[0])
-    if default_selected not in tab_titles:
-        default_selected = tab_titles[0]
+    # 他モードからのダイレクト割り込み（問題直接指定）がある場合も編集タブを強制選択
+    if "target_edit_global_index" in st.session_state or "edit_target_index" in st.session_state:
+        st.session_state["data_edit_tab_radio"] = tab_titles[1]
 
-    # タブの作成（ラジオボタンによる切替）
+    # デフォルト選択値の安全チェック
+    if "data_edit_tab_radio" not in st.session_state or st.session_state["data_edit_tab_radio"] not in tab_titles:
+        st.session_state["data_edit_tab_radio"] = tab_titles[0]
+
+    # タブの作成
     tab_selection = st.radio(
         "操作を選択してください",
         tab_titles,
-        index=tab_titles.index(default_selected),
-        horizontal=True,
-        key="data_edit_tab_radio"
+        key="data_edit_tab_radio",
+        horizontal=True
     )
 
     # --- 1. 新規追加タブ ---
     if tab_selection == "📝 1. データの新規追加":
         st.subheader("📝 新しい問題データの追加")
-        # （既存の新規追加フォームコードをここに配置）
-        st.info("ここに新規問題追加用のフォームが入ります。")
+        st.caption("既存のデータ構造に合わせて、新しい問題を1件追加します。")
+
+        current_df = st.session_state["working_df"]
+
+        if current_df.empty:
+            st.warning("基準となるデータ構造が存在しません。")
+        else:
+            with st.form(key="add_new_question_form"):
+                new_row = {}
+                cols = [c for c in current_df.columns if c not in ["_global_index", "_orig_row_id"]]
+
+                # 列ごとに適切な入力フィールドを生成
+                for col in cols:
+                    if col in ["question", "explanation", "問題", "解説"]:
+                        new_row[col] = st.text_area(f"【{col}】", value="", placeholder=f"{col}を入力してください")
+                    elif col in ["type", "出題形式"]:
+                        # 既存の出題形式から選択肢を提示
+                        type_opts = list(current_df[col].dropna().unique()) if col in current_df.columns else []
+                        if type_opts:
+                            new_row[col] = st.selectbox(f"【{col}】", options=type_opts)
+                        else:
+                            new_row[col] = st.text_input(f"【{col}】", value="")
+                    else:
+                        new_row[col] = st.text_input(f"【{col}】", value="")
+
+                if st.form_submit_button("➕ 新規問題をリストに追加", use_container_width=True):
+                    # 新しい行を作成して追加
+                    new_df = pd.DataFrame([new_row])
+                    st.session_state["working_df"] = pd.concat([st.session_state["working_df"], new_df], ignore_index=True)
+                    st.success("新しい問題を追加しました！「✏️ 2. データの編集・削除」タブで確認・編集できます。")
+                    st.rerun()
 
     # --- 2. 編集・削除タブ ---
     elif tab_selection == "✏️ 2. データの編集・削除":
         st.subheader("🛠️ かんたん問題修正・削除フォーム")
-
-        if "working_df" not in st.session_state or st.session_state["working_df"].empty:
-            st.session_state["working_df"] = df_all.copy().reset_index(drop=True)
 
         current_df = st.session_state["working_df"]
 
@@ -1002,14 +1033,12 @@ elif selected == "➕ データ追加・編集":
             elif "edit_target_index" in st.session_state:
                 target_idx = st.session_state.pop("edit_target_index")
 
-            # 強制指定の初期位置用フラグ
             forced_select_pos = None
 
             if target_idx is not None:
                 try:
                     target_idx = int(target_idx)
                     if 0 <= target_idx < len(current_df):
-                        # フィルターをクリア
                         st.session_state["filter_story"] = "すべて"
                         st.session_state["filter_type"] = "すべて"
                         st.session_state["filter_keyword"] = ""
@@ -1017,7 +1046,6 @@ elif selected == "➕ データ追加・編集":
                 except (ValueError, TypeError):
                     pass
 
-            # キャラ名鑑等からのキーワード連携対応
             if "edit_search_keyword" in st.session_state and st.session_state["edit_search_keyword"]:
                 st.session_state["filter_keyword"] = st.session_state.pop("edit_search_keyword")
                 st.session_state["filter_story"] = "すべて"
@@ -1057,7 +1085,6 @@ elif selected == "➕ データ追加・編集":
 
             # フィルタリング適用
             filtered_df = current_df.copy()
-            # 元の作業DF内の絶対行番号を保持する別名カラムを付与
             filtered_df["_orig_row_id"] = current_df.index
 
             if selected_story != "すべて" and story_col_name:
@@ -1073,15 +1100,12 @@ elif selected == "➕ データ追加・編集":
             if filtered_count == 0:
                 st.warning("条件に一致する問題が見つかりませんでした。")
             else:
-                # 選択位置の決定
                 default_pos = 0
                 if forced_select_pos is not None:
-                    # 割り込み指定されたIDが絞り込み結果内の何番目にあるか探す
                     matched_positions = [pos for pos, orig_id in enumerate(filtered_df["_orig_row_id"]) if orig_id == forced_select_pos]
                     if matched_positions:
                         default_pos = matched_positions[0]
 
-                # 表示用ラベル生成関数
                 def make_label(i):
                     row = filtered_df.iloc[i]
                     orig_num = row["_orig_row_id"] + 1
@@ -1090,7 +1114,6 @@ elif selected == "➕ データ追加・編集":
                         q_text = "（問題文なし）"
                     return f"【No.{orig_num}】 {q_text[:35]}..."
 
-                # セレクトボックス（index引数で初期位置指定）
                 selected_pos = st.selectbox(
                     f"編集・削除する問題を選択（全 {filtered_count} 件）",
                     options=list(range(filtered_count)),
@@ -1134,6 +1157,7 @@ elif selected == "➕ データ追加・編集":
                         st.session_state["working_df"] = st.session_state["working_df"].drop(index=orig_index).reset_index(drop=True)
                         st.success(f"問題 No.{orig_index + 1} を削除しました。")
                         st.rerun()
+                        
 # --- 7. キャラクターデータモード ---
 elif selected == "🏴 キャラクターデータ":
     st.title("🏴 キャラクター名鑑")
