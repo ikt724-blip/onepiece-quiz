@@ -631,19 +631,44 @@ elif selected == "キャラ名鑑":
         st.markdown("---")
 
         cols = st.columns(3)
+        IMAGE_DIRS = ["images", "img", "static/images", "assets", "data/images", "."]
+
         for idx, (_, row) in enumerate(char_df.iterrows()):
             orig_row_id = int(row["_orig_row_id"])
             c_name = get_clean_str(row.get("name") or row.get("名前") or row.get("question") or f"データ No.{orig_row_id + 1}")
             c_nick = get_clean_str(row.get("nickname") or row.get("異名"))
-            c_img = get_clean_str(row.get("image") or row.get("画像"))
+            
+            # 画像パスの解決処理（image, question_image, answer_image, 画像に対応）
+            resolved_img_path = None
+            for col in ["image", "question_image", "answer_image", "画像"]:
+                if col in row and pd.notna(row[col]):
+                    val = str(row[col]).strip()
+                    if val and val.lower() != "nan":
+                        raw_path = val.replace("\n", ",").split(",")[0].strip()
+                        if raw_path.startswith("http://") or raw_path.startswith("https://") or raw_path.startswith("data:image"):
+                            resolved_img_path = raw_path
+                            break
+                        elif os.path.exists(raw_path):
+                            resolved_img_path = raw_path
+                            break
+                        else:
+                            filename = os.path.basename(raw_path)
+                            for d in IMAGE_DIRS:
+                                test_path = os.path.join(d, filename)
+                                if os.path.exists(test_path):
+                                    resolved_img_path = test_path
+                                    break
+                        if resolved_img_path:
+                            break
+
             c_aff = get_clean_str(row.get("affiliation") or row.get("所属"))
             c_fruit = get_clean_str(row.get("devil_fruit") or row.get("悪魔の実") or row.get("answer"))
             c_desc = get_clean_str(row.get("explanation") or row.get("解説"))
 
             with cols[idx % 3]:
                 with st.container(border=True):
-                    if c_img:
-                        st.image(c_img, use_container_width=True)
+                    if resolved_img_path:
+                        st.image(resolved_img_path, use_container_width=True)
                     else:
                         st.caption("🖼️ 画像なし")
 
