@@ -1312,115 +1312,133 @@ elif selected == "➕ データ追加・編集":
 elif selected == "🏴 キャラクターデータ":
     st.title("🏴 キャラクター名鑑")
     st.caption("登録されているキャラクターの一覧・詳細情報を閲覧できます。")
-    st.write("---")
+    st.markdown("---")
 
-    # セッション状態またはグローバル変数からデータフレームを取得
+    # 1. データの取得
     if "working_df" in st.session_state and not st.session_state["working_df"].empty:
-        base_df = st.session_state["working_df"]
-    elif "df_all" in globals() and isinstance(df_all, pd.DataFrame):
-        base_df = df_all.copy()
+        current_df = st.session_state["working_df"]
+    elif "df_all" in globals() and isinstance(df_all, pd.DataFrame) and not df_all.empty:
+        current_df = df_all.copy()
     else:
-        base_df = pd.DataFrame()
+        current_df = pd.DataFrame()
 
-    if base_df.empty:
-        st.info("データが読み込まれていません。")
+    if current_df.empty:
+        st.info("登録されているデータがありません。「➕ データ追加・編集」からデータを追加してください。")
     else:
-        # キャラデータのフィルタリング（柔軟な判定）
-        char_df = pd.DataFrame()
+        # 2. キャラデータの自動抽出・判定
+        # (1) type 列に「キャラ」が含まれるデータ
+        # (2) 名前の列が存在するデータ
+        # (3) 明確なキャラデータがない場合は全データを対象にして表示
         
-        # 1. type 列で判定
-        if "type" in base_df.columns:
-            target_types = ["キャラデータ", "キャラ", "キャラクター", "character"]
-            mask = base_df["type"].astype(str).str.strip().str.lower().isin([t.lower() for t in target_types])
-            char_df = base_df[mask].copy()
+        type_col = None
+        for col in current_df.columns:
+            if str(col).lower() in ["type", "出題形式", "種別", "カテゴリ", "category"]:
+                type_col = col
+                break
 
-        # 2. type 列でヒットしなかった場合、name / nickname 列の存在で判定
-        if char_df.empty:
-            char_cols = [c for c in ["name", "nickname", "キャラ名", "名前"] if c in base_df.columns]
-            if char_cols:
-                char_df = base_df[base_df[char_cols].notna().any(axis=1)].copy()
+        char_mask = pd.Series(True, index=current_df.index)
+        
+        if type_col is not None:
+            # 「キャラ」というキーワードが含まれる行を優先抽出
+            is_char = current_df[type_col].astype(str).str.contains("キャラ|character", case=False, na=False)
+            if is_char.any():
+                char_mask = is_char
 
-        if char_df.empty:
-            st.info("登録されているキャラクターデータが見つかりませんでした。「➕ データ追加・編集」からキャラクターデータを追加してください。")
+        char_df = current_df[char_mask].copy()
+        char_df["_orig_row_id"] = char_df.index
+
+        # 3. 検索・フィルタ機能
+        st.markdown("##### 🔍 キャラクター検索")
+        s_col1, s_col2 = st.columns([3, 1])
+        with s_col1:
+            search_kw = st.text_input("名前・キーワードで検索", placeholder="例: ルフィ、海賊団、能力名など", key="char_search_input")
+        
+        # フィルタリング実行
+        if search_kw:
+            mask = char_df.astype(str).apply(lambda x: x.str.contains(search_kw, case=False, na=False)).any(axis=1)
+            char_df = char_df[mask]
+
+        st.write(f"表示中のデータ件数: **{len(char_df)}** 件")
+        st.markdown("---")
+
+        if len(char_df) == 0:
+            st.warning("一致するキャラクターデータが見つかりませんでした。")
         else:
-            # 🔍 検索・絞り込みエリア
-            c_search1, c_search2 = st.columns([2, 1])
-            with c_search1:
-                search_kw = st.text_input("🔍 キャラクター検索（名前・異名・所属・解説など）", placeholder="例: ルフィ、麦わら、海賊団")
-            
-            with c_search2:
-                # 悪魔の実の系統などのフィルター
-                ftype_col = None
-                for col in ["fruit_type", "悪魔の実の系統", "系統", "fruit"]:
-                    if col in char_df.columns:
-                        ftype_col = col
+            # 4. カード形式での描画
+            cols = st.columns(3)
+            for idx, (_, row) in enumerate(char_df.iterrows()):
+                orig_row_id = int(row["_orig_row_id"])
+
+                # カラムの自動マッピング（表記揺れ吸収）
+                # 名前
+                c_name = ""
+                for k in ["name", "名前", "キャラ名", "キャラクター名", "question", "問題"]:
+                    if k in row and pd.notna(row[k]) and str(row[k]).strip():
+                        c_name = str(row[k]).strip()
+                        break
+                if not c_name:
+                    c_name = f"データ No.{orig_row_id + 1}"
+
+                # 異名・二つ名
+                c_nick = ""
+                for k in ["nickname", "異名", "二つ名", "称号"]:
+                    if k in row and pd.notna(row[k]):
+                        c_nick = str(row[k]).strip()
                         break
 
-                ftype_options = ["すべて"]
-                if ftype_col:
-                    valid_types = sorted([str(x).strip() for x in char_df[ftype_col].dropna().unique() if str(x).strip()])
-                    ftype_options.extend(valid_types)
-                
-                selected_ftype = st.selectbox("悪魔の実の系統", options=ftype_options)
+                # 画像
+                c_img = ""
+                for k in ["image", "question_image", "画像", "img", "photo"]:
+                    if k in row and pd.notna(row[k]):
+                        c_img = str(row[k]).strip()
+                        break
 
-            # キーワード & 系統フィルタリング
-            filtered_char = char_df.copy()
-            filtered_char["_orig_row_id"] = char_df.index
+                # 所属・カテゴリ
+                c_aff = ""
+                for k in ["affiliation", "所属", "組織", "story", "編", "カテゴリ"]:
+                    if k in row and pd.notna(row[k]):
+                        c_aff = str(row[k]).strip()
+                        break
 
-            if search_kw:
-                mask = filtered_char.astype(str).apply(lambda x: x.str.contains(search_kw, case=False, na=False)).any(axis=1)
-                filtered_char = filtered_char[mask]
+                # 悪魔の実・能力・解答
+                c_fruit = ""
+                for k in ["devil_fruit", "悪魔の実", "能力", "answer", "解答"]:
+                    if k in row and pd.notna(row[k]):
+                        c_fruit = str(row[k]).strip()
+                        break
 
-            if selected_ftype != "すべて" and ftype_col:
-                filtered_char = filtered_char[filtered_char[ftype_col].astype(str).str.strip() == selected_ftype]
+                # 解説・説明
+                c_desc = ""
+                for k in ["explanation", "解説", "detail", "説明", "description"]:
+                    if k in row and pd.notna(row[k]):
+                        c_desc = str(row[k]).strip()
+                        break
 
-            st.write(f"該当件数: **{len(filtered_char)}** 件")
-            st.write("---")
+                with cols[idx % 3]:
+                    with st.container(border=True):
+                        if c_img:
+                            st.image(c_img, use_container_width=True)
+                        else:
+                            st.caption("🖼️ 画像なし")
 
-            if len(filtered_char) == 0:
-                st.warning("条件に一致するキャラクターが見つかりませんでした。")
-            else:
-                # 3列グリッドでカード描画
-                cols = st.columns(3)
-                for idx, (_, row) in enumerate(filtered_char.iterrows()):
-                    orig_row_id = int(row["_orig_row_id"])
+                        st.markdown(f"### {c_name}")
+                        if c_nick:
+                            st.caption(f"【異名】{c_nick}")
 
-                    # 項目の安全取得（日/英両対応）
-                    c_name = get_clean_str(row.get("name") or row.get("名前") or row.get("キャラ名") or row.get("question") or "名称未設定")
-                    c_nick = get_clean_str(row.get("nickname") or row.get("異名") or row.get("二つ名"))
-                    c_fruit = get_clean_str(row.get("devil_fruit") or row.get("悪魔の実") or row.get("能力"))
-                    c_ftype = get_clean_str(row.get("fruit_type") or row.get("系統"))
-                    c_aff = get_clean_str(row.get("affiliation") or row.get("所属") or row.get("組織"))
-                    c_desc = get_clean_str(row.get("explanation") or row.get("解説") or row.get("detail") or row.get("説明"))
-                    img_val = get_clean_str(row.get("image") or row.get("question_image") or row.get("画像"))
+                        st.markdown("---")
+                        if c_aff:
+                            st.write(f"**🏴 所属/編:** {c_aff}")
+                        if c_fruit:
+                            st.write(f"**🍈 能力/解答:** {c_fruit}")
 
-                    with cols[idx % 3]:
-                        with st.container(border=True):
-                            # 画像表示
-                            if img_val:
-                                st.image(img_val, use_container_width=True)
-                            else:
-                                st.caption("🖼️ No Image")
+                        if c_desc:
+                            with st.expander("📝 詳細・解説"):
+                                st.write(c_desc)
 
-                            # 名前・二つ名
-                            st.markdown(f"### {c_name}")
-                            if c_nick:
-                                st.caption(f"【異名】{c_nick}")
-                            
-                            st.markdown("---")
-                            st.write(f"**🏴 所属:** {c_aff or '不明'}")
-                            st.write(f"**🍈 悪魔の実:** {c_fruit or 'なし'}")
-                            if c_ftype:
-                                st.write(f"**🏷️ 系統:** {c_ftype}")
-
-                            if c_desc:
-                                with st.expander("📝 詳細・解説"):
-                                    st.write(c_desc)
-
-                            # ✏️ 編集ボタン（データ追加・編集モードへ遷移）
-                            if st.button("✏️ このキャラを編集", key=f"btn_edit_char_{orig_row_id}", use_container_width=True):
-                                st.session_state["target_edit_global_index"] = orig_row_id
-                                st.session_state["edit_active_tab"] = 1
-                                st.session_state["edit_search_keyword"] = c_name
-                                st.session_state["current_nav"] = "➕ データ追加・編集"
-                                st.rerun()
+                        # ✏️ 編集ボタン（データ追加・編集モードへ強制遷移）
+                        if st.button("✏️ このデータを編集", key=f"btn_edit_char_{orig_row_id}", use_container_width=True):
+                            st.session_state["target_edit_global_index"] = orig_row_id
+                            st.session_state["edit_active_tab"] = 1
+                            st.session_state["data_edit_tab_radio"] = "✏️ 2. データの編集・削除"
+                            st.session_state["current_nav"] = "➕ データ追加・編集"
+                            st.rerun()
