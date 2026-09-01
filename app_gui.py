@@ -960,6 +960,10 @@ elif selected == "➕ データ追加・編集":
     # タブの作成（ラジオボタンによる切替）
     tab_titles = ["📝 1. データの新規追加", "✏️ 2. データの編集・削除"]
     
+    # default_tab_idx が範囲外にならないよう制御
+    if default_tab_idx >= len(tab_titles):
+        default_tab_idx = 0
+
     tab_selection = st.radio(
         "操作を選択してください",
         tab_titles,
@@ -993,15 +997,18 @@ elif selected == "➕ データ追加・編集":
             elif "edit_target_index" in st.session_state:
                 target_idx = st.session_state.pop("edit_target_index")
 
+            # 強制指定の初期位置用フラグ
+            forced_select_pos = None
+
             if target_idx is not None:
                 try:
                     target_idx = int(target_idx)
                     if 0 <= target_idx < len(current_df):
-                        # フィルターをすべてクリアして該当問題を直接選択
+                        # フィルターをクリア
                         st.session_state["filter_story"] = "すべて"
                         st.session_state["filter_type"] = "すべて"
                         st.session_state["filter_keyword"] = ""
-                        st.session_state["edit_sub_idx"] = target_idx
+                        forced_select_pos = target_idx
                 except (ValueError, TypeError):
                     pass
 
@@ -1045,6 +1052,9 @@ elif selected == "➕ データ追加・編集":
 
             # フィルタリング適用
             filtered_df = current_df.copy()
+            # 元の作業DF内の絶対行番号を保持する別名カラムを付与
+            filtered_df["_orig_row_id"] = current_df.index
+
             if selected_story != "すべて" and story_col_name:
                 filtered_df = filtered_df[filtered_df[story_col_name].astype(str).str.strip() == selected_story]
             if selected_type != "すべて" and "type" in filtered_df.columns:
@@ -1053,27 +1063,39 @@ elif selected == "➕ データ追加・編集":
                 mask = filtered_df.astype(str).apply(lambda x: x.str.contains(keyword, case=False, na=False)).any(axis=1)
                 filtered_df = filtered_df[mask]
 
-            # 元のインデックス（全体の何番目か）を保持したままリセット
-            filtered_df = filtered_df.reset_index(drop=False)
             filtered_count = len(filtered_df)
 
             if filtered_count == 0:
                 st.warning("条件に一致する問題が見つかりませんでした。")
             else:
-                # 選択中のインデックスが範囲外にならないよう制御
-                if "edit_sub_idx" not in st.session_state or st.session_state["edit_sub_idx"] >= filtered_count:
-                    st.session_state["edit_sub_idx"] = 0
+                # 選択位置の決定
+                default_pos = 0
+                if forced_select_pos is not None:
+                    # 割り込み指定されたIDが絞り込み結果内の何番目にあるか探す
+                    matched_positions = [pos for pos, orig_id in enumerate(filtered_df["_orig_row_id"]) if orig_id == forced_select_pos]
+                    if matched_positions:
+                        default_pos = matched_positions[0]
 
-                # 該当問題の選択セレクトボックス
+                # 表示用ラベル生成関数
+                def make_label(i):
+                    row = filtered_df.iloc[i]
+                    orig_num = row["_orig_row_id"] + 1
+                    q_text = get_clean_str(row.get("question") or row.get("name") or row.get("問題") or "")
+                    if not q_text:
+                        q_text = "（問題文なし）"
+                    return f"【No.{orig_num}】 {q_text[:35]}..."
+
+                # セレクトボックス（keyの衝突を防ぐため index 引数で安全制御）
                 selected_pos = st.selectbox(
                     f"編集・削除する問題を選択（全 {filtered_count} 件）",
                     options=list(range(filtered_count)),
-                    format_func=lambda i: f"【No.{filtered_df.iloc[i].get('index', i) + 1}】 {str(filtered_df.iloc[i].get('question', filtered_df.iloc[i].get('name', '')))[:35]}...",
-                    key="edit_sub_idx"
+                    index=default_pos if default_pos < filtered_count else 0,
+                    format_func=make_label,
+                    key="edit_select_pos_key"
                 )
 
                 selected_row = filtered_df.iloc[selected_pos]
-                orig_index = selected_row["index"]
+                orig_index = int(selected_row["_orig_row_id"])
 
                 st.markdown("---")
                 st.markdown(f"#### ✏️ 問題 No.{orig_index + 1} の編集・削除")
@@ -1082,7 +1104,7 @@ elif selected == "➕ データ追加・編集":
                 with st.form(key=f"edit_form_{orig_index}"):
                     edited_data = {}
                     for col in current_df.columns:
-                        if col == "_global_index":
+                        if col in ["_global_index", "_orig_row_id"]:
                             continue
                         val = selected_row.get(col, "")
                         val_str = "" if pd.isna(val) else str(val)
@@ -1104,9 +1126,7 @@ elif selected == "➕ データ追加・編集":
                     confirm_delete = st.checkbox("本当に削除してよろしければチェックを入れてください", key=f"chk_del_{orig_index}")
                     
                     if st.button("🚨 問題を完全に削除", type="primary", disabled=not confirm_delete, key=f"btn_del_{orig_index}"):
-                        # working_df から該当行を削除してインデックスを振り直す
                         st.session_state["working_df"] = st.session_state["working_df"].drop(index=orig_index).reset_index(drop=True)
-                        st.session_state["edit_sub_idx"] = 0
                         st.success(f"問題 No.{orig_index + 1} を削除しました。")
                         st.rerun()
 
