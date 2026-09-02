@@ -82,6 +82,9 @@ if "practice_active" not in st.session_state:
 if "inline_edit_index" not in st.session_state:
     st.session_state["inline_edit_index"] = None
 
+if "last_judge_result" not in st.session_state:
+    st.session_state["last_judge_result"] = None
+
 def get_clean_str(val):
     if pd.isna(val) or val is None:
         return ""
@@ -396,8 +399,9 @@ elif selected == "練習モード":
                     st.session_state["practice_mode_sel"] = mode_tab
                     st.session_state["practice_current_idx"] = random.choice(targets)
                     st.session_state["practice_answered"] = False
-                    st.session_state["practice_active"] = True
                     st.session_state["inline_edit_index"] = None
+                    st.session_state["last_judge_result"] = None
+                    st.session_state["practice_active"] = True
                     st.rerun()
 
         else:
@@ -411,6 +415,7 @@ elif selected == "練習モード":
                 if st.button("⬅️ モード選択に戻る"):
                     st.session_state["practice_active"] = False
                     st.session_state["inline_edit_index"] = None
+                    st.session_state["last_judge_result"] = None
                     st.rerun()
 
             st.divider()
@@ -420,6 +425,7 @@ elif selected == "練習モード":
                 if st.button("モード選択に戻る"):
                     st.session_state["practice_active"] = False
                     st.session_state["inline_edit_index"] = None
+                    st.session_state["last_judge_result"] = None
                     st.rerun()
             else:
                 current_idx = st.session_state.get("practice_current_idx", target_indices[0])
@@ -437,7 +443,6 @@ elif selected == "練習モード":
                 with col_q_title:
                     st.subheader(q_text)
                 with col_edit_btn:
-                    # 編集ボタンを押すとインライン編集パネルを表示・非同期切替
                     if st.button("✏️ この問題を修正", key=f"edit_jump_{current_idx}"):
                         if st.session_state.get("inline_edit_index") == current_idx:
                             st.session_state["inline_edit_index"] = None
@@ -447,8 +452,15 @@ elif selected == "練習モード":
 
                 display_question_image(row, width=250)
 
-                # --- フォーム化により、解答・次の問題・中断のすべてでEnterキー入力に対応 ---
                 answered_state = st.session_state.get("practice_answered", False)
+
+                # --- 判定結果の表示（rerunの前にセッションに保持して確実に描画） ---
+                if answered_state and st.session_state.get("last_judge_result"):
+                    res = st.session_state["last_judge_result"]
+                    if res["is_correct"]:
+                        st.success("🎉 正解です！お見事！")
+                    else:
+                        st.error(f"❌ 残念！不正解です。正解は: 『 {' / '.join(correct_answers_list)} 』 です。")
 
                 with st.form(key=f"quiz_form_{current_idx}"):
                     if not answered_state:
@@ -469,13 +481,12 @@ elif selected == "練習モード":
                                 st.session_state["quiz_stats"][current_idx]["correct"] += 1
                                 if current_idx in st.session_state["wrong_q_indices"]:
                                     st.session_state["wrong_q_indices"].remove(current_idx)
-                                st.success("🎉 正解です！お見事！")
                             else:
                                 st.session_state["wrong_q_indices"].add(current_idx)
-                                st.error(f"❌ 残念！不正解です。正解は: 『 {' / '.join(correct_answers_list)} 』 です。")
+
+                            st.session_state["last_judge_result"] = {"is_correct": is_correct}
                             st.rerun()
                     else:
-                        # 解答後のコントロール（Enterキーで次の問題に進む）
                         col_btn1, col_btn2 = st.columns(2)
                         with col_btn1:
                             next_btn = st.form_submit_button("次の問題へ ➡️", type="primary", use_container_width=True)
@@ -486,13 +497,14 @@ elif selected == "練習モード":
                             st.session_state["practice_current_idx"] = random.choice(target_indices)
                             st.session_state["practice_answered"] = False
                             st.session_state["inline_edit_index"] = None
+                            st.session_state["last_judge_result"] = None
                             st.rerun()
                         elif stop_btn:
                             st.session_state["practice_active"] = False
                             st.session_state["inline_edit_index"] = None
+                            st.session_state["last_judge_result"] = None
                             st.rerun()
 
-                # --- 画面下部にインライン編集画面を表示 ---
                 if st.session_state.get("inline_edit_index") == current_idx:
                     st.markdown("---")
                     st.markdown(f"#### 🛠️ インデックス [{current_idx}] のインライン編集＆保存")
@@ -516,6 +528,7 @@ elif selected == "練習モード":
                             st.success(f"インデックス [{current_idx}] のデータを更新しました！")
                             st.session_state["inline_edit_index"] = None
                             st.session_state["practice_answered"] = False
+                            st.session_state["last_judge_result"] = None
                             st.session_state["practice_current_idx"] = random.choice(target_indices)
                             time.sleep(0.5)
                             st.rerun()
