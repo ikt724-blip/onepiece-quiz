@@ -25,9 +25,7 @@ def deep_clean_dataframe(df):
         return pd.DataFrame() if df is None else df
     df = df.copy()
     for col in df.columns:
-        # もしセルにDataFrameやSeriesが紛れ込んでいたら取り出す
         df[col] = df[col].apply(lambda x: x.iloc[0] if isinstance(x, (pd.DataFrame, pd.Series)) else x)
-        # NaNや文字列の "nan", "None" を空文字にし、他はすべて安全に文字列化
         df[col] = df[col].map(lambda x: "" if pd.isna(x) or str(x).lower() in ["nan", "none", "<na>"] else str(x))
     return df
 
@@ -347,9 +345,15 @@ elif selected == "練習モード":
                 c_top1, c_top2 = st.columns([3, 1])
                 with c_top1: st.markdown(f"### 第 {curr_idx + 1} 問 / 全 {total_q} 問")
                 with c_top2:
-                    if st.button("🛠️ この問題を修正する", key=f"btn_edit_q_{curr_idx}"):
+                    # ▼【バグ修正箇所】現在表示している問題のインデックスを確実に渡して編集画面へジャンプ
+                    if st.button("🛠️ この問題を修正する", key=f"btn_edit_q_{curr_idx}_safe"):
+                        orig_idx = q.get("_original_index")
+                        if orig_idx is not None:
+                            st.session_state["target_edit_global_index"] = int(orig_idx)
+                        else:
+                            st.session_state["target_edit_global_index"] = curr_idx
+                        
                         st.session_state.practice_started = False
-                        st.session_state["target_edit_global_index"] = q.get("_original_index", curr_idx)
                         st.session_state["edit_active_tab"] = 1
                         st.session_state["data_edit_tab_radio"] = "✏️ 2. データの編集・削除"
                         st.session_state["current_nav"] = "データ編集"
@@ -649,7 +653,6 @@ elif selected == "データ編集":
                     if st.form_submit_button("💾 変更を保存する", use_container_width=True):
                         for col, new_val in edited_data.items():
                             st.session_state["working_df"].at[selected_pos, col] = new_val
-                        # 保存後即座にディープクリーンを実施
                         st.session_state["working_df"] = deep_clean_dataframe(st.session_state["working_df"])
                         st.success(f"No.{selected_pos + 1} の更新を保存しました！")
                         st.rerun()
@@ -663,7 +666,7 @@ elif selected == "データ編集":
 
 elif selected == "キャラ名鑑":
     st.title("🏴‍☠️ キャラクター名鑑")
-    st.caption("検索またはプルダウンから選択して、キャラクター情報の確認と下部の表からのデータ編集ができます。")
+    st.caption("検索またはプルダウンから選択して、キャラクター情報の確認ができます。")
     st.markdown("---")
 
     if char_data is None or char_data.empty:
@@ -696,7 +699,6 @@ elif selected == "キャラ名鑑":
 
             if selected_char_tuple:
                 _, row = selected_char_tuple
-                orig_row_id = int(row["_orig_row_id"])
                 
                 c_id = get_clean_str(row.get("characterid"))
                 c_name = get_clean_str(row.get("name"))
@@ -754,33 +756,3 @@ elif selected == "キャラ名鑑":
 
                         if info_lines:
                             st.markdown("\n".join(info_lines))
-
-                st.markdown("### 🛠️ 選択中キャラクターのデータ編集用テーブル")
-                st.caption("以下の項目を変更し、「変更を保存する」ボタンを押すとキャラクターデータが更新されます。")
-
-                with st.form(key=f"char_edit_form_{orig_row_id}"):
-                    edited_char_data = {}
-                    cols_in_form = st.columns(3)
-                    
-                    for idx, col in enumerate(char_data.columns):
-                        target_col = cols_in_form[idx % 3]
-                        with target_col:
-                            val = row.get(col, "")
-                            val_str = "" if pd.isna(val) else str(val)
-                            
-                            if col == "characterid":
-                                st.text_input(f"【{col} (変更不可)】", value=val_str, disabled=True, key=f"char_in_{orig_row_id}_{col}")
-                                edited_char_data[col] = val_str
-                            else:
-                                edited_char_data[col] = st.text_input(f"【{col}】", value=val_str, key=f"char_in_{orig_row_id}_{col}")
-
-                    st.markdown("")
-                    save_clicked = st.form_submit_button("💾 変更を保存する", type="primary", use_container_width=True)
-
-                    if save_clicked:
-                        for col, new_val in edited_char_data.items():
-                            st.session_state["char_working_df"].loc[orig_row_id, col] = str(new_val)
-                        # 保存後即座にディープクリーンを実施
-                        st.session_state["char_working_df"] = deep_clean_dataframe(st.session_state["char_working_df"])
-                        st.success(f"「{c_name}」のデータを更新しました！")
-                        st.rerun()
