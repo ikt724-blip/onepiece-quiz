@@ -638,7 +638,7 @@ elif selected == "キャラ名鑑":
         else:
             def make_char_label(idx_row):
                 _, row = idx_row
-                return get_clean_str(row.get("name")) or f"ID: {row.get('characterid')}"
+                return get_clean_str(row.get("name") or row.get("名前")) or f"ID: {row.get('characterid')}"
 
             char_options = list(c_df.iterrows())
             # 検索欄のすぐ下：キャラクター名プルダウン
@@ -652,18 +652,22 @@ elif selected == "キャラ名鑑":
                 _, row = selected_char_tuple
                 orig_row_id = int(row["_orig_row_id"])
                 
-                c_name = get_clean_str(row.get("name"))
-                c_birth = get_clean_str(row.get("birthday") or row.get("誕生日"))
+                c_name = get_clean_str(row.get("name") or row.get("名前"))
+                c_nickname = get_clean_str(row.get("nickname") or row.get("異名") or row.get("通り名"))
+                c_age = get_clean_str(row.get("age") or row.get("年齢"))
+                c_birth = get_clean_str(row.get("birthday") or row.get("誕生日") or row.get("生年月日"))
                 c_birth_place = get_clean_str(row.get("birth_place") or row.get("出身") or row.get("出身地"))
+                c_bounty = get_clean_str(row.get("bounty") or row.get("懸賞金"))
+                c_height = get_clean_str(row.get("height") or row.get("身長"))
                 c_aff = get_clean_str(row.get("affiliation") or row.get("所属") or row.get("役職"))
-                c_fruit = get_clean_str(row.get("devil_fruit") or row.get("悪魔の実"))
-                c_fruit_type = get_clean_str(row.get("fruit_type"))
+                c_fruit = get_clean_str(row.get("devil_fruit") or row.get("悪魔の実") or row.get("能力"))
+                c_fruit_type = get_clean_str(row.get("fruit_type") or row.get("タイプ"))
                 c_weapon = get_clean_str(row.get("weapon") or row.get("使用武器") or row.get("武器"))
 
                 # 画像パスの解決
                 resolved_img_path = None
                 IMAGE_DIRS = ["images", "img", "static/images", "assets", "data/images", "."]
-                raw_img = get_clean_str(row.get("image"))
+                raw_img = get_clean_str(row.get("image") or row.get("画像"))
                 if raw_img:
                     if raw_img.startswith("http://") or raw_img.startswith("https://") or raw_img.startswith("data:image"):
                         resolved_img_path = raw_img
@@ -693,17 +697,23 @@ elif selected == "キャラ名鑑":
                         info_lines = []
                         if c_name:
                             info_lines.append(f"- **キャラクター名:** {c_name}")
+                        if c_nickname:
+                            info_lines.append(f"- **異名（通り名）:** {c_nickname}")
+                        if c_age:
+                            info_lines.append(f"- **年齢:** {c_age}")
                         if c_birth:
-                            info_lines.append(f"- **誕生日:** {c_birth}")
+                            info_lines.append(f"- **誕生日 / 生年月日:** {c_birth}")
                         if c_birth_place:
-                            info_lines.append(f"- **出身:** {c_birth_place}")
+                            info_lines.append(f"- **出身地:** {c_birth_place}")
+                        if c_bounty:
+                            info_lines.append(f"- **懸賞金:** {c_bounty}")
+                        if c_height:
+                            info_lines.append(f"- **身長:** {c_height}")
                         if c_aff:
                             info_lines.append(f"- **所属／役職:** {c_aff}")
-                        
                         if c_fruit:
                             fruit_display = f"{c_fruit} ({c_fruit_type})" if c_fruit_type else c_fruit
                             info_lines.append(f"- **悪魔の実:** {fruit_display}")
-                        
                         if c_weapon:
                             info_lines.append(f"- **使用武器:** {c_weapon}")
 
@@ -717,7 +727,6 @@ elif selected == "キャラ名鑑":
                 with st.form(key=f"inline_edit_table_form_{orig_row_id}"):
                     edited_char_data = {}
                     
-                    # カラムごとに横並び・または分かりやすくフォーム部品を配置
                     cols_in_form = st.columns(min(len(char_data.columns), 3))
                     for idx, col in enumerate(char_data.columns):
                         target_col = cols_in_form[idx % len(cols_in_form)]
