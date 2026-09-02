@@ -18,29 +18,36 @@ st.set_page_config(
 # --- 1. データ読み込み＆セッション状態管理 ---
 @st.cache_data
 def load_all_data():
-    """リポジトリ内の全Excelファイルを統合して読み込む"""
+    """リポジトリ内の全Excelファイル、およびキャラ名鑑用マスターを読み込む"""
     files = glob.glob("*.xlsx")
     if not files:
-        return pd.DataFrame()
+        return pd.DataFrame(), pd.DataFrame()
 
     df_list = []
+    char_df = pd.DataFrame()
+
     for f in files:
         try:
-            temp_df = pd.read_excel(f)
-            temp_df["source_file"] = f
-            df_list.append(temp_df)
+            if "character_master" in f:
+                xls = pd.ExcelFile(f)
+                char_df = pd.read_excel(f, sheet_name=xls.sheet_names[0])
+            else:
+                temp_df = pd.read_excel(f)
+                temp_df["source_file"] = f
+                df_list.append(temp_df)
         except Exception:
             continue
 
-    if not df_list:
-        return pd.DataFrame()
+    df_all = pd.concat(df_list, ignore_index=True) if df_list else pd.DataFrame()
+    return df_all, char_df
 
-    return pd.concat(df_list, ignore_index=True)
-
-df_all = load_all_data()
+df_all, character_master_df = load_all_data()
 
 if "working_df" not in st.session_state or st.session_state["working_df"].empty:
     st.session_state["working_df"] = df_all.copy().reset_index(drop=True)
+
+if "char_working_df" not in st.session_state or st.session_state["char_working_df"].empty:
+    st.session_state["char_working_df"] = character_master_df.copy().reset_index(drop=True)
 
 if "wrong_q_indices" not in st.session_state:
     st.session_state["wrong_q_indices"] = set()
@@ -176,6 +183,7 @@ with st.sidebar:
     st.session_state["current_nav"] = selected
 
 current_data = st.session_state.get("working_df", pd.DataFrame())
+char_data = st.session_state.get("char_working_df", pd.DataFrame())
 
 # --- 画面制御 ---
 if selected == "ホーム":
@@ -610,43 +618,33 @@ elif selected == "データ編集":
 
 elif selected == "キャラ名鑑":
     st.title("🏴‍☠️ キャラクター名鑑")
-    st.caption("検索または選択して、キャラクターの詳細情報と画像を確認できます。")
+    st.caption("検索またはプルダウンから選択して、キャラクターの登録詳細データを確認できます。")
     st.markdown("---")
 
-    if current_data.empty:
-        st.info("登録されているデータがありません。")
+    if char_data.empty:
+        st.info("キャラクターマスター（character_master.xlsx）のデータが見つかりません。")
     else:
-        # 上部に検索欄とプルダウンを配置
-        search_keyword = st.text_input("🔍 キャラクター名検索欄", placeholder="例: ルフィ、海賊団 など")
+        search_keyword = st.text_input("🔍 キャラクター名検索欄", placeholder="名前、異名、悪魔の実などで検索...")
 
-        char_df = current_data.copy()
-        char_df["_orig_row_id"] = char_df.index
+        c_df = char_data.copy()
+        c_df["_orig_row_id"] = c_df.index
 
         if search_keyword:
-            mask = char_df.astype(str).apply(lambda x: x.str.contains(search_keyword, case=False, na=False)).any(axis=1)
-            char_df = char_df[mask]
+            mask = c_df.astype(str).apply(lambda x: x.str.contains(search_keyword, case=False, na=False)).any(axis=1)
+            c_df = c_df[mask]
 
-        if char_df.empty:
+        if c_df.empty:
             st.warning("条件に一致するキャラクターが見つかりません。")
         else:
             def make_char_label(idx_row):
                 _, row = idx_row
                 orig_id = int(row["_orig_row_id"])
-                c_name = ""
-                for col in ["answer", "解答", "正解", "name", "名前", "キャラ名", "Name"]:
-                    val = get_clean_str(row.get(col))
-                    if val:
-                        c_name = val
-                        break
-                if not c_name:
-                    c_name = get_clean_str(row.get("question") or row.get("問題"))
-                if not c_name:
-                    c_name = f"データ No.{orig_id + 1}"
-                c_aff = get_clean_str(row.get("affiliation") or row.get("所属"))
-                aff_str = f" ({c_aff})" if c_aff else ""
-                return f"{c_name}{aff_str} [No.{orig_id + 1}]"
+                c_name = get_clean_str(row.get("name")) or f"ID: {row.get('characterid')}"
+                c_nick = get_clean_str(row.get("nickname"))
+                nick_str = f" ({c_nick})" if c_nick else ""
+                return f"{c_name}{nick_str} [No.{orig_id + 1}]"
 
-            char_options = list(char_df.iterrows())
+            char_options = list(c_df.iterrows())
             selected_char_tuple = st.selectbox(
                 "キャラクター名プルダウン",
                 options=char_options,
@@ -657,47 +655,34 @@ elif selected == "キャラ名鑑":
                 _, row = selected_char_tuple
                 orig_row_id = int(row["_orig_row_id"])
                 
-                c_name = ""
-                for col in ["answer", "解答", "正解", "name", "名前", "キャラ名", "Name"]:
-                    val = get_clean_str(row.get(col))
-                    if val:
-                        c_name = val
-                        break
-                if not c_name:
-                    c_name = get_clean_str(row.get("question") or row.get("問題"))
-                if not c_name:
-                    c_name = f"データ No.{orig_row_id + 1}"
-
-                # 各項目の取得
+                c_id = get_clean_str(row.get("characterid"))
+                c_name = get_clean_str(row.get("name"))
+                c_nick = get_clean_str(row.get("nickname"))
+                c_fruit = get_clean_str(row.get("devil_fruit"))
+                c_fruit_type = get_clean_str(row.get("fruit_type"))
+                
+                # その他の項目（もしエクセルに追加された場合にも対応できるよう動的に拾う）
                 c_birth = get_clean_str(row.get("birthday") or row.get("誕生日"))
                 c_birth_place = get_clean_str(row.get("birth_place") or row.get("出身") or row.get("出身地"))
-                c_aff = get_clean_str(row.get("affiliation") or row.get("所属") or row.get("組織") or row.get("役職"))
-                c_fruit = get_clean_str(row.get("devil_fruit") or row.get("悪魔の実") or row.get("能力"))
+                c_aff = get_clean_str(row.get("affiliation") or row.get("所属") or row.get("役職"))
                 c_weapon = get_clean_str(row.get("weapon") or row.get("使用武器") or row.get("武器"))
                 c_desc = get_clean_str(row.get("explanation") or row.get("解説"))
 
                 # 画像パスの解決
                 resolved_img_path = None
                 IMAGE_DIRS = ["images", "img", "static/images", "assets", "data/images", "."]
-                for col in ["image", "question_image", "answer_image", "画像"]:
-                    if col in row and pd.notna(row[col]):
-                        val = str(row[col]).strip()
-                        if val and val.lower() != "nan":
-                            raw_path = val.replace("\n", ",").split(",")[0].strip()
-                            if raw_path.startswith("http://") or raw_path.startswith("https://") or raw_path.startswith("data:image"):
-                                resolved_img_path = raw_path
-                                break
-                            elif os.path.exists(raw_path):
-                                resolved_img_path = raw_path
-                                break
-                            else:
-                                filename = os.path.basename(raw_path)
-                                for d in IMAGE_DIRS:
-                                    test_path = os.path.join(d, filename)
-                                    if os.path.exists(test_path):
-                                        resolved_img_path = test_path
-                                        break
-                            if resolved_img_path:
+                raw_img = get_clean_str(row.get("image"))
+                if raw_img:
+                    if raw_img.startswith("http://") or raw_img.startswith("https://") or raw_img.startswith("data:image"):
+                        resolved_img_path = raw_img
+                    elif os.path.exists(raw_img):
+                        resolved_img_path = raw_img
+                    else:
+                        filename = os.path.basename(raw_img)
+                        for d in IMAGE_DIRS:
+                            test_path = os.path.join(d, filename)
+                            if os.path.exists(test_path):
+                                resolved_img_path = test_path
                                 break
 
                 st.markdown("---")
@@ -717,6 +702,10 @@ elif selected == "キャラ名鑑":
                         
                         # 箇条書きリストを作成（空欄の項目は自動非表示）
                         info_lines = []
+                        if c_id:
+                            info_lines.append(f"- **キャラクターID:** {c_id}")
+                        if c_nick:
+                            info_lines.append(f"- **異名:** {c_nick}")
                         if c_birth:
                             info_lines.append(f"- **誕生日:** {c_birth}")
                         if c_birth_place:
@@ -724,7 +713,8 @@ elif selected == "キャラ名鑑":
                         if c_aff:
                             info_lines.append(f"- **所属／役職:** {c_aff}")
                         if c_fruit:
-                            info_lines.append(f"- **悪魔の実:** {c_fruit}")
+                            fruit_display = f"{c_fruit} ({c_fruit_type})" if c_fruit_type else c_fruit
+                            info_lines.append(f"- **悪魔の実:** {fruit_display}")
                         if c_weapon:
                             info_lines.append(f"- **使用武器:** {c_weapon}")
 
@@ -733,11 +723,3 @@ elif selected == "キャラ名鑑":
 
                         if c_desc:
                             st.markdown(f"\n**【詳細・解説】**\n{c_desc}")
-
-                        st.markdown("")
-                        if st.button("✏️ このデータを編集する", key=f"btn_edit_char_{orig_row_id}", type="primary"):
-                            st.session_state["target_edit_global_index"] = orig_row_id
-                            st.session_state["edit_active_tab"] = 1
-                            st.session_state["data_edit_tab_radio"] = "✏️ 2. データの編集・削除"
-                            st.session_state["current_nav"] = "データ編集"
-                            st.rerun()
