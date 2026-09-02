@@ -42,11 +42,22 @@ def load_all_data():
 
 df_all, character_master_df = load_all_data()
 
+# 必須の追加項目がExcel側にない場合でも自動で列を追加しておく
+required_char_cols = ["birthday", "birthplace", "affiliation", "weapon", "age", "bounty", "height"]
+for col in required_char_cols:
+    if col not in character_master_df.columns:
+        character_master_df[col] = ""
+
 if "working_df" not in st.session_state or st.session_state["working_df"].empty:
     st.session_state["working_df"] = df_all.copy().reset_index(drop=True)
 
 if "char_working_df" not in st.session_state or st.session_state["char_working_df"].empty:
     st.session_state["char_working_df"] = character_master_df.copy().reset_index(drop=True)
+else:
+    # セッション側にも足りない列があれば補完
+    for col in required_char_cols:
+        if col not in st.session_state["char_working_df"].columns:
+            st.session_state["char_working_df"][col] = ""
 
 if "wrong_q_indices" not in st.session_state:
     st.session_state["wrong_q_indices"] = set()
@@ -656,7 +667,7 @@ elif selected == "キャラ名鑑":
                 c_nickname = get_clean_str(row.get("nickname") or row.get("異名") or row.get("通り名"))
                 c_age = get_clean_str(row.get("age") or row.get("年齢"))
                 c_birth = get_clean_str(row.get("birthday") or row.get("誕生日") or row.get("生年月日"))
-                c_birth_place = get_clean_str(row.get("birth_place") or row.get("出身") or row.get("出身地"))
+                c_birth_place = get_clean_str(row.get("birth_place") or row.get("birthplace") or row.get("出身") or row.get("出身地"))
                 c_bounty = get_clean_str(row.get("bounty") or row.get("懸賞金"))
                 c_height = get_clean_str(row.get("height") or row.get("身長"))
                 c_aff = get_clean_str(row.get("affiliation") or row.get("所属") or row.get("役職"))
