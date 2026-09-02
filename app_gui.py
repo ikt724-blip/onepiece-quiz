@@ -208,6 +208,14 @@ with st.sidebar:
     )
     
     st.session_state["current_nav"] = selected
+    
+    # ▼【改善案】ナビセンター下部に簡易スタッツ（総問題数・苦手問題数）を常時表示
+    st.divider()
+    st.markdown("### 📊 学習ステータス")
+    current_total_q = len(st.session_state.get("working_df", pd.DataFrame()))
+    current_wrong_q = len(st.session_state.get("wrong_q_indices", set()))
+    st.metric(label="📚 登録総問題数", value=f"{current_total_q:,} 問")
+    st.metric(label="🔥 苦手問題数", value=f"{current_wrong_q:,} 問")
 
 current_data = st.session_state.get("working_df", pd.DataFrame())
 char_data = st.session_state.get("char_working_df", pd.DataFrame())
@@ -225,7 +233,8 @@ if selected == "ホーム":
     wt100_full_html = ""
 
     if all_imgs:
-        sample_imgs = random.sample(all_imgs, min(len(all_imgs), 60))
+        # ▼【改善案】画像読み込み過多による描画負荷を軽減するため最大20枚に制限
+        sample_imgs = random.sample(all_imgs, min(len(all_imgs), 20))
         NUM_COLS = 6
         columns_b64 = [[] for _ in range(NUM_COLS)]
         img_idx = 0
@@ -249,7 +258,7 @@ if selected == "ホーム":
         <!DOCTYPE html><html><head><style>
         * {{ box-sizing: border-box; margin: 0; padding: 0; }}
         html, body {{ width: 100%; height: 100%; background-color: #0e1117; font-family: sans-serif; overflow: hidden; }}
-        .wt-hero-container {{ position: relative; width: 100%; height: 600px; background-color: #000; overflow: hidden; border-radius: 12px; }}
+        .wt-hero-container {{ position: relative; width: 100%; height: 500px; background-color: #000; overflow: hidden; border-radius: 12px; }}
         .scroll-wrapper {{ display: flex; width: 100%; height: 100%; gap: 4px; opacity: 0.85; background-color: #000; }}
         .scroll-column {{ flex: 1; height: 100%; overflow: hidden; position: relative; }}
         .scroll-track {{ display: flex; flex-direction: column; gap: 6px; width: 100%; }}
@@ -275,10 +284,51 @@ if selected == "ホーム":
         """
 
     if wt100_full_html:
-        components.html(wt100_full_html, height=620)
+        components.html(wt100_full_html, height=520)
     else:
         st.warning("表示できる画像ファイルが見つかりません。")
 
+    # ▼【改善案】ホーム画面直下からのクイックダイレクトアクセス導線を追加
+    st.write("")
+    st.subheader("⚡ クイックアクセス")
+    q_col1, q_col2, q_col3 = st.columns(3)
+    with q_col1:
+        if st.button("📖 練習モードを始める", use_container_width=True, type="primary"):
+            st.session_state["current_nav"] = "練習モード"
+            st.rerun()
+    with q_col2:
+        if st.button("🏆 本番模試に挑戦する", use_container_width=True):
+            st.session_state["current_nav"] = "本番模試"
+            st.rerun()
+    with q_col3:
+        if st.button("🔥 苦手克服モードへ", use_container_width=True):
+            st.session_state["current_nav"] = "苦手克服"
+            st.rerun()
+
+elif selected == "練習モード":
+    # (既存の練習モードコード[cite: 1] はそのまま保持)
+    pass
+
+elif selected == "本番模試":
+    # (既存の本番模試コード[cite: 1] はそのまま保持)
+    pass
+
+elif selected == "苦手克服":
+    # (既存の苦手克服モードコード[cite: 1] はそのまま保持)
+    pass
+
+elif selected == "AI検索":
+    # (既存のAI検索モードコード[cite: 1] はそのまま保持)
+    pass
+
+elif selected == "データ編集":
+    # (既存のデータ編集コード[cite: 1] はそのまま保持)
+    pass
+
+elif selected == "キャラ名鑑":
+    # (既存のキャラ名鑑コード[cite: 1] はそのまま保持)
+    pass
+```[cite: 1]
 elif selected == "練習モード":
     st.title("📖 練習モード")
     st.caption("自分のペースで苦手克服！出題条件を自由にカスタマイズして挑戦しましょう。")
