@@ -76,11 +76,11 @@ if "wrong_q_indices" not in st.session_state:
 if "quiz_stats" not in st.session_state:
     st.session_state["quiz_stats"] = {}
 
-if "edit_target_index" not in st.session_state:
-    st.session_state["edit_target_index"] = None
-
 if "practice_active" not in st.session_state:
     st.session_state["practice_active"] = False
+
+if "inline_edit_index" not in st.session_state:
+    st.session_state["inline_edit_index"] = None
 
 def get_clean_str(val):
     if pd.isna(val) or val is None:
@@ -207,7 +207,6 @@ if "current_nav" not in st.session_state:
 with st.sidebar:
     st.header("🏴‍☠️ ナビセンター")
     
-    # 選択状態を反映するため、明示的にインデックスを取得
     current_selection = st.session_state["current_nav"]
     def_idx = menu_options.index(current_selection) if current_selection in menu_options else 0
 
@@ -398,6 +397,7 @@ elif selected == "練習モード":
                     st.session_state["practice_current_idx"] = random.choice(targets)
                     st.session_state["practice_answered"] = False
                     st.session_state["practice_active"] = True
+                    st.session_state["inline_edit_index"] = None
                     st.rerun()
 
         else:
@@ -410,6 +410,7 @@ elif selected == "練習モード":
             with col_top2:
                 if st.button("⬅️ モード選択に戻る"):
                     st.session_state["practice_active"] = False
+                    st.session_state["inline_edit_index"] = None
                     st.rerun()
 
             st.divider()
@@ -418,6 +419,7 @@ elif selected == "練習モード":
                 st.warning("出題できる問題がありません。")
                 if st.button("モード選択に戻る"):
                     st.session_state["practice_active"] = False
+                    st.session_state["inline_edit_index"] = None
                     st.rerun()
             else:
                 current_idx = st.session_state.get("practice_current_idx", target_indices[0])
@@ -435,43 +437,91 @@ elif selected == "練習モード":
                 with col_q_title:
                     st.subheader(q_text)
                 with col_edit_btn:
-                    # 修正ボタン：問題のインデックスをセットし、current_navを変更して即座にジャンプ
-                    if st.button("✏️ この問題を修正", key=f"edit_jump_{current_idx}", help="データ編集モードを開いてこの問題を修正します"):
-                        st.session_state["edit_target_index"] = current_idx
-                        st.session_state["current_nav"] = "データ編集"
+                    # 編集ボタンを押すとインライン編集パネルを表示・非同期切替
+                    if st.button("✏️ この問題を修正", key=f"edit_jump_{current_idx}"):
+                        if st.session_state.get("inline_edit_index") == current_idx:
+                            st.session_state["inline_edit_index"] = None
+                        else:
+                            st.session_state["inline_edit_index"] = current_idx
                         st.rerun()
 
                 display_question_image(row, width=250)
 
-                # --- エンターキーでの解答（st.formの活用） ---
+                # --- フォーム化により、解答・次の問題・中断のすべてでEnterキー入力に対応 ---
+                answered_state = st.session_state.get("practice_answered", False)
+
                 with st.form(key=f"quiz_form_{current_idx}"):
-                    user_input = st.text_input("解答を入力してください（Enterキーで解答）:", key=f"practice_input_{current_idx}")
-                    submit_btn = st.form_submit_button("解答する", type="primary")
-
-                    if submit_btn:
-                        st.session_state["practice_answered"] = True
-                        if current_idx not in st.session_state["quiz_stats"]:
-                            st.session_state["quiz_stats"][current_idx] = {"total": 0, "correct": 0}
-                        st.session_state["quiz_stats"][current_idx]["total"] += 1
-
-                        is_correct = False
-                        if user_input:
-                            is_correct = check_answers_multi([user_input], correct_answers_list)
+                    if not answered_state:
+                        user_input = st.text_input("解答を入力してください（Enterキーで解答）:", key=f"practice_input_{current_idx}")
+                        submitted = st.form_submit_button("解答する", type="primary")
                         
-                        if is_correct:
-                            st.session_state["quiz_stats"][current_idx]["correct"] += 1
-                            if current_idx in st.session_state["wrong_q_indices"]:
-                                st.session_state["wrong_q_indices"].remove(current_idx)
-                            st.success("🎉 正解です！お見事！")
-                        else:
-                            st.session_state["wrong_q_indices"].add(current_idx)
-                            st.error(f"❌ 残念！不正解です。正解は: 『 {' / '.join(correct_answers_list)} 』 です。")
+                        if submitted:
+                            st.session_state["practice_answered"] = True
+                            if current_idx not in st.session_state["quiz_stats"]:
+                                st.session_state["quiz_stats"][current_idx] = {"total": 0, "correct": 0}
+                            st.session_state["quiz_stats"][current_idx]["total"] += 1
 
-                if st.session_state.get("practice_answered", False):
-                    if st.button("次の問題へ ➡️", key=f"next_q_{current_idx}"):
-                        st.session_state["practice_current_idx"] = random.choice(target_indices)
-                        st.session_state["practice_answered"] = False
-                        st.rerun()
+                            is_correct = False
+                            if user_input:
+                                is_correct = check_answers_multi([user_input], correct_answers_list)
+                            
+                            if is_correct:
+                                st.session_state["quiz_stats"][current_idx]["correct"] += 1
+                                if current_idx in st.session_state["wrong_q_indices"]:
+                                    st.session_state["wrong_q_indices"].remove(current_idx)
+                                st.success("🎉 正解です！お見事！")
+                            else:
+                                st.session_state["wrong_q_indices"].add(current_idx)
+                                st.error(f"❌ 残念！不正解です。正解は: 『 {' / '.join(correct_answers_list)} 』 です。")
+                            st.rerun()
+                    else:
+                        # 解答後のコントロール（Enterキーで次の問題に進む）
+                        col_btn1, col_btn2 = st.columns(2)
+                        with col_btn1:
+                            next_btn = st.form_submit_button("次の問題へ ➡️", type="primary", use_container_width=True)
+                        with col_btn2:
+                            stop_btn = st.form_submit_button("⏹️ 中断する", use_container_width=True)
+
+                        if next_btn:
+                            st.session_state["practice_current_idx"] = random.choice(target_indices)
+                            st.session_state["practice_answered"] = False
+                            st.session_state["inline_edit_index"] = None
+                            st.rerun()
+                        elif stop_btn:
+                            st.session_state["practice_active"] = False
+                            st.session_state["inline_edit_index"] = None
+                            st.rerun()
+
+                # --- 画面下部にインライン編集画面を表示 ---
+                if st.session_state.get("inline_edit_index") == current_idx:
+                    st.markdown("---")
+                    st.markdown(f"#### 🛠️ インデックス [{current_idx}] のインライン編集＆保存")
+                    with st.form(key=f"inline_edit_form_{current_idx}"):
+                        updated_values = {}
+                        for col in df.columns:
+                            if col == "source_file":
+                                continue
+                            val = str(row[col]) if pd.notna(row[col]) else ""
+                            updated_values[col] = st.text_input(f"列: {col}", value=val, key=f"inline_{current_idx}_{col}")
+
+                        col_save, col_cancel = st.columns([1, 1])
+                        with col_save:
+                            save_btn = st.form_submit_button("💾 変更を保存して次の問題へ", type="primary", use_container_width=True)
+                        with col_cancel:
+                            cancel_btn = st.form_submit_button("キャンセル", use_container_width=True)
+
+                        if save_btn:
+                            for col, val in updated_values.items():
+                                st.session_state["working_df"].at[current_idx, col] = val
+                            st.success(f"インデックス [{current_idx}] のデータを更新しました！")
+                            st.session_state["inline_edit_index"] = None
+                            st.session_state["practice_answered"] = False
+                            st.session_state["practice_current_idx"] = random.choice(target_indices)
+                            time.sleep(0.5)
+                            st.rerun()
+                        elif cancel_btn:
+                            st.session_state["inline_edit_index"] = None
+                            st.rerun()
 
 elif selected == "本番模試":
     pass
@@ -493,20 +543,14 @@ elif selected == "データ編集":
     if df.empty:
         st.warning("編集するデータがありません。")
     else:
-        target_idx = st.session_state.get("edit_target_index", 0)
-        if target_idx is None or target_idx >= len(df):
-            target_idx = 0
-
         selected_row_idx = st.number_input(
             "編集する行インデックスを指定",
             min_value=0,
             max_value=len(df) - 1,
-            value=int(target_idx),
+            value=0,
             step=1
         )
         
-        st.session_state["edit_target_index"] = None
-
         st.markdown(f"--- \n### 📝 インデックス [{selected_row_idx}] の編集")
         row_data = df.iloc[selected_row_idx]
 
