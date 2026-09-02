@@ -15,12 +15,8 @@ st.set_page_config(
     page_title="ONE PIECE ナレッジキング対策", page_icon="🏴‍☠️", layout="wide"
 )
 
-# --- 【超重要】データフレームの完全浄化（ValueError対策） ---
+# --- データフレームの完全浄化 ---
 def deep_clean_dataframe(df):
-    """
-    DataFrameの全セルを走査し、内部の入れ子（SeriesやDataFrame）や
-    不正な欠損値を強制的に安全な文字列・数値に変換してValueErrorを防ぎます。
-    """
     if df is None or df.empty:
         return pd.DataFrame() if df is None else df
     df = df.copy()
@@ -56,7 +52,6 @@ def load_all_data():
 
 df_all, character_master_df = load_all_data()
 
-# 必須列の保証
 required_char_cols = [
     "characterid", "name", "image", "bounty", "birthday", 
     "age", "birth_place", "affiliation", "weapon", "nickname", 
@@ -66,14 +61,12 @@ for col in required_char_cols:
     if col not in character_master_df.columns:
         character_master_df[col] = ""
 
-# セッション状態の初期化
 if "working_df" not in st.session_state or st.session_state["working_df"] is None or st.session_state["working_df"].empty:
     st.session_state["working_df"] = df_all.copy().reset_index(drop=True)
 
 if "char_working_df" not in st.session_state or st.session_state["char_working_df"] is None or st.session_state["char_working_df"].empty:
     st.session_state["char_working_df"] = character_master_df.copy().reset_index(drop=True)
 
-# 常にセッション内のデータもクリーンな状態に維持
 st.session_state["working_df"] = deep_clean_dataframe(st.session_state["working_df"])
 st.session_state["char_working_df"] = deep_clean_dataframe(st.session_state["char_working_df"])
 
@@ -342,11 +335,12 @@ elif selected == "練習モード":
             else:
                 q = st.session_state.p_quiz_list[curr_idx]
                 st.progress((curr_idx) / total_q)
+                
                 c_top1, c_top2 = st.columns([3, 1])
                 with c_top1: st.markdown(f"### 第 {curr_idx + 1} 問 / 全 {total_q} 問")
                 with c_top2:
-                    # ▼【バグ修正箇所】現在表示している問題のインデックスを確実に渡して編集画面へジャンプ
-                    if st.button("🛠️ この問題を修正する", key=f"btn_edit_q_{curr_idx}_safe"):
+                    # ▼【完全修正】ボタンが独立して動作するように独立キーを付与
+                    if st.button("🛠️ この問題を修正する", key=f"btn_edit_q_{curr_idx}_independent"):
                         orig_idx = q.get("_original_index")
                         if orig_idx is not None:
                             st.session_state["target_edit_global_index"] = int(orig_idx)
