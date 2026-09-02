@@ -15,6 +15,22 @@ st.set_page_config(
     page_title="ONE PIECE ナレッジキング対策", page_icon="🏴‍☠️", layout="wide"
 )
 
+# --- 【超重要】データフレームの完全浄化（ValueError対策） ---
+def deep_clean_dataframe(df):
+    """
+    DataFrameの全セルを走査し、内部の入れ子（SeriesやDataFrame）や
+    不正な欠損値を強制的に安全な文字列・数値に変換してValueErrorを防ぎます。
+    """
+    if df is None or df.empty:
+        return pd.DataFrame() if df is None else df
+    df = df.copy()
+    for col in df.columns:
+        # もしセルにDataFrameやSeriesが紛れ込んでいたら取り出す
+        df[col] = df[col].apply(lambda x: x.iloc[0] if isinstance(x, (pd.DataFrame, pd.Series)) else x)
+        # NaNや文字列の "nan", "None" を空文字にし、他はすべて安全に文字列化
+        df[col] = df[col].map(lambda x: "" if pd.isna(x) or str(x).lower() in ["nan", "none", "<na>"] else str(x))
+    return df
+
 # --- 1. データ読み込み＆セッション状態管理 ---
 @st.cache_data
 def load_all_data():
@@ -38,24 +54,11 @@ def load_all_data():
             continue
 
     df_all = pd.concat(df_list, ignore_index=True) if df_list else pd.DataFrame()
-    return df_all, char_df
+    return deep_clean_dataframe(df_all), deep_clean_dataframe(char_df)
 
 df_all, character_master_df = load_all_data()
 
-def clean_dataframe_strings(df):
-    if df is None or df.empty:
-        return pd.DataFrame() if df is None else df
-    df = df.copy()
-    for col in df.columns:
-        if isinstance(df[col], pd.DataFrame):
-            df[col] = df[col].iloc[:, 0]
-        df[col] = df[col].apply(lambda x: "" if pd.isna(x) else str(x))
-    return df
-
-character_master_df = clean_dataframe_strings(character_master_df)
-df_all = clean_dataframe_strings(df_all)
-
-# 画像の定義に合わせた必須列の保証
+# 必須列の保証
 required_char_cols = [
     "characterid", "name", "image", "bounty", "birthday", 
     "age", "birth_place", "affiliation", "weapon", "nickname", 
@@ -65,18 +68,16 @@ for col in required_char_cols:
     if col not in character_master_df.columns:
         character_master_df[col] = ""
 
+# セッション状態の初期化
 if "working_df" not in st.session_state or st.session_state["working_df"] is None or st.session_state["working_df"].empty:
     st.session_state["working_df"] = df_all.copy().reset_index(drop=True)
 
 if "char_working_df" not in st.session_state or st.session_state["char_working_df"] is None or st.session_state["char_working_df"].empty:
     st.session_state["char_working_df"] = character_master_df.copy().reset_index(drop=True)
-else:
-    for col in required_char_cols:
-        if col not in st.session_state["char_working_df"].columns:
-            st.session_state["char_working_df"][col] = ""
 
-st.session_state["char_working_df"] = clean_dataframe_strings(st.session_state["char_working_df"])
-st.session_state["working_df"] = clean_dataframe_strings(st.session_state["working_df"])
+# 常にセッション内のデータもクリーンな状態に維持
+st.session_state["working_df"] = deep_clean_dataframe(st.session_state["working_df"])
+st.session_state["char_working_df"] = deep_clean_dataframe(st.session_state["char_working_df"])
 
 if "wrong_q_indices" not in st.session_state:
     st.session_state["wrong_q_indices"] = set()
@@ -220,7 +221,7 @@ with st.sidebar:
 current_data = st.session_state.get("working_df", pd.DataFrame())
 char_data = st.session_state.get("char_working_df", pd.DataFrame())
 
-# --- 画面制御 ---
+# --- 各画面のレンダリング ---
 if selected == "ホーム":
     import streamlit.components.v1 as components
     all_imgs = (
@@ -603,7 +604,9 @@ elif selected == "データ編集":
                         "story": new_story
                     }
 
-                    st.session_state["working_df"] = pd.concat([st.session_state["working_df"], pd.DataFrame([new_entry])], ignore_index=True)
+                    new_df_row = pd.DataFrame([new_entry])
+                    st.session_state["working_df"] = pd.concat([st.session_state["working_df"], new_df_row], ignore_index=True)
+                    st.session_state["working_df"] = deep_clean_dataframe(st.session_state["working_df"])
                     st.success("新しい問題データを追加しました！")
                     st.rerun()
 
@@ -646,12 +649,15 @@ elif selected == "データ編集":
                     if st.form_submit_button("💾 変更を保存する", use_container_width=True):
                         for col, new_val in edited_data.items():
                             st.session_state["working_df"].at[selected_pos, col] = new_val
+                        # 保存後即座にディープクリーンを実施
+                        st.session_state["working_df"] = deep_clean_dataframe(st.session_state["working_df"])
                         st.success(f"No.{selected_pos + 1} の更新を保存しました！")
                         st.rerun()
 
                 with st.expander("🗑️ この問題を削除する"):
                     if st.button("🚨 問題を完全に削除", type="primary", key=f"btn_del_{selected_pos}"):
                         st.session_state["working_df"] = st.session_state["working_df"].drop(index=selected_pos).reset_index(drop=True)
+                        st.session_state["working_df"] = deep_clean_dataframe(st.session_state["working_df"])
                         st.success("データを削除しました。")
                         st.rerun()
 
@@ -762,7 +768,6 @@ elif selected == "キャラ名鑑":
                             val = row.get(col, "")
                             val_str = "" if pd.isna(val) else str(val)
                             
-                            # IDは編集不可として扱う（内部的にそのまま保持）
                             if col == "characterid":
                                 st.text_input(f"【{col} (変更不可)】", value=val_str, disabled=True, key=f"char_in_{orig_row_id}_{col}")
                                 edited_char_data[col] = val_str
@@ -775,5 +780,7 @@ elif selected == "キャラ名鑑":
                     if save_clicked:
                         for col, new_val in edited_char_data.items():
                             st.session_state["char_working_df"].loc[orig_row_id, col] = str(new_val)
+                        # 保存後即座にディープクリーンを実施
+                        st.session_state["char_working_df"] = deep_clean_dataframe(st.session_state["char_working_df"])
                         st.success(f"「{c_name}」のデータを更新しました！")
                         st.rerun()
