@@ -44,11 +44,10 @@ df_all, character_master_df = load_all_data()
 
 # 文字列型に統一して安全にするクリーニング関数
 def clean_dataframe_strings(df):
-    if df.empty:
-        return df
+    if df is None or df.empty:
+        return pd.DataFrame() if df is None else df
     df = df.copy()
     for col in df.columns:
-        # 重複列や不正なシリーズが含まれないようにする
         if isinstance(df[col], pd.DataFrame):
             df[col] = df[col].iloc[:, 0]
         df[col] = df[col].apply(lambda x: "" if pd.isna(x) else str(x))
@@ -63,19 +62,18 @@ for col in required_char_cols:
     if col not in character_master_df.columns:
         character_master_df[col] = ""
 
-if "working_df" not in st.session_state or st.session_state["working_df"].empty:
+if "working_df" not in st.session_state or st.session_state["working_df"] is None or st.session_state["working_df"].empty:
     st.session_state["working_df"] = df_all.copy().reset_index(drop=True)
 
-if "char_working_df" not in st.session_state or st.session_state["char_working_df"].empty:
+if "char_working_df" not in st.session_state or st.session_state["char_working_df"] is None or st.session_state["char_working_df"].empty:
     st.session_state["char_working_df"] = character_master_df.copy().reset_index(drop=True)
 else:
-    # セッション側にも足りない列があれば補完
     for col in required_char_cols:
         if col not in st.session_state["char_working_df"].columns:
             st.session_state["char_working_df"][col] = ""
 
-# セッション側のデータも文字列として安全に保持させる
 st.session_state["char_working_df"] = clean_dataframe_strings(st.session_state["char_working_df"])
+st.session_state["working_df"] = clean_dataframe_strings(st.session_state["working_df"])
 
 if "wrong_q_indices" not in st.session_state:
     st.session_state["wrong_q_indices"] = set()
@@ -101,6 +99,8 @@ def image_to_base64(img_path):
         return None
 
 def display_question_image(row, width=200, show_caption=True):
+    if row is None:
+        return
     img_sources = []
     IMAGE_DIRS = ["images", "img", "static/images", "assets", "data/images", "."]
     
@@ -143,6 +143,8 @@ def display_question_image(row, width=200, show_caption=True):
                 pass
 
 def get_correct_answers_list(q, correct_ans_str):
+    if q is None:
+        return []
     answers = []
     for i in range(1, 10):
         val = get_clean_str(q.get(f"answer_{i}"))
@@ -165,6 +167,8 @@ def check_answers_multi(user_inputs, correct_answers):
     return set(user_clean) == set(correct_clean)
 
 def format_question_and_answer(q):
+    if q is None:
+        return "このキャラクターの名前は？", ""
     raw_question = get_clean_str(q.get("question") or q.get("問題") or q.get("Question") or q.get("question_text"))
     name = get_clean_str(q.get("name") or q.get("名前") or q.get("キャラ名") or q.get("Name"))
     image = get_clean_str(q.get("image") or q.get("画像"))
@@ -285,7 +289,7 @@ elif selected == "練習モード":
     st.caption("自分のペースで苦手克服！出題条件を自由にカスタマイズして挑戦しましょう。")
     st.write("---")
 
-    if current_data.empty:
+    if current_data is None or current_data.empty:
         st.warning("出題できるデータが見つかりません。")
     else:
         if "practice_started" not in st.session_state: st.session_state.practice_started = False
@@ -392,7 +396,7 @@ elif selected == "本番模試":
     st.caption("本番同様の制限時間で挑戦！全データからランダム出題されます。")
     st.write("---")
 
-    if current_data.empty:
+    if current_data is None or current_data.empty:
         st.warning("出題できるデータが見つかりません。")
     else:
         if "exam_started" not in st.session_state: st.session_state.exam_started = False
@@ -534,7 +538,7 @@ elif selected == "AI検索":
     st.caption("〜 キャラクターマスタ＆問題データベース 爆速逆引き図鑑 〜")
     st.write("---")
 
-    if current_data.empty:
+    if current_data is None or current_data.empty:
         st.error("データが見つかりません。")
     else:
         search_query = st.text_input("🔍 キーワード検索", "", placeholder="名前・悪魔の実・技・所属・問題文・解説など")
@@ -613,7 +617,8 @@ elif selected == "データ編集":
         if target_idx is not None:
             try:
                 t_val = int(target_idx)
-                if 0 <= t_val < len(current_data): forced_pos = t_val
+                if current_data is not None and not current_data.empty and 0 <= t_val < len(current_data):
+                    forced_pos = t_val
             except Exception: pass
 
         def make_label(i):
@@ -621,38 +626,40 @@ elif selected == "データ編集":
             q_text = get_clean_str(row.get("question") or row.get("name") or row.get("問題") or "")
             return f"【No.{i+1}】 {q_text[:35]}..."
 
-        selected_pos = st.selectbox("編集する問題を選択", options=list(range(len(current_data))), index=forced_pos if forced_pos is not None else 0, format_func=make_label)
+        if current_data is None or current_data.empty:
+            st.info("編集可能な問題データがありません。")
+        else:
+            selected_pos = st.selectbox("編集する問題を選択", options=list(range(len(current_data))), index=forced_pos if forced_pos is not None else 0, format_func=make_label)
 
-        if len(current_data) > 0:
-            selected_row = current_data.iloc[selected_pos]
-            with st.form(key=f"edit_form_{selected_pos}"):
-                edited_data = {}
-                for col in current_data.columns:
-                    val = selected_row.get(col, "")
-                    val_str = "" if pd.isna(val) else str(val)
-                    edited_data[col] = st.text_input(f"【{col}】", value=val_str)
+            if len(current_data) > 0:
+                selected_row = current_data.iloc[selected_pos]
+                with st.form(key=f"edit_form_{selected_pos}"):
+                    edited_data = {}
+                    for col in current_data.columns:
+                        val = selected_row.get(col, "")
+                        val_str = "" if pd.isna(val) else str(val)
+                        edited_data[col] = st.text_input(f"【{col}】", value=val_str)
 
-                if st.form_submit_button("💾 変更を保存する", use_container_width=True):
-                    for col, new_val in edited_data.items():
-                        st.session_state["working_df"].at[selected_pos, col] = new_val
-                    st.success(f"No.{selected_pos + 1} の更新を保存しました！")
-                    st.rerun()
+                    if st.form_submit_button("💾 変更を保存する", use_container_width=True):
+                        for col, new_val in edited_data.items():
+                            st.session_state["working_df"].at[selected_pos, col] = new_val
+                        st.success(f"No.{selected_pos + 1} の更新を保存しました！")
+                        st.rerun()
 
-            with st.expander("🗑️ この問題を削除する"):
-                if st.button("🚨 問題を完全に削除", type="primary", key=f"btn_del_{selected_pos}"):
-                    st.session_state["working_df"] = st.session_state["working_df"].drop(index=selected_pos).reset_index(drop=True)
-                    st.success("データを削除しました。")
-                    st.rerun()
+                with st.expander("🗑️ この問題を削除する"):
+                    if st.button("🚨 問題を完全に削除", type="primary", key=f"btn_del_{selected_pos}"):
+                        st.session_state["working_df"] = st.session_state["working_df"].drop(index=selected_pos).reset_index(drop=True)
+                        st.success("データを削除しました。")
+                        st.rerun()
 
 elif selected == "キャラ名鑑":
     st.title("🏴‍☠️ キャラクター名鑑")
     st.caption("検索またはプルダウンから選択して、キャラクター情報の確認と下部の表からのデータ編集ができます。")
     st.markdown("---")
 
-    if char_data.empty:
+    if char_data is None or char_data.empty:
         st.info("キャラクターマスター（character_master.xlsx）のデータが見つかりません。")
     else:
-        # 上部：キャラクター名検索欄
         search_keyword = st.text_input("🔍 キャラクター名検索欄", placeholder="名前、異名、悪魔の実などで検索...")
 
         c_df = char_data.copy()
@@ -670,7 +677,6 @@ elif selected == "キャラ名鑑":
                 return get_clean_str(row.get("name") or row.get("名前")) or f"ID: {row.get('characterid')}"
 
             char_options = list(c_df.iterrows())
-            # 検索欄のすぐ下：キャラクター名プルダウン
             selected_char_tuple = st.selectbox(
                 "キャラクター名プルダウン",
                 options=char_options,
@@ -693,7 +699,6 @@ elif selected == "キャラ名鑑":
                 c_fruit_type = get_clean_str(row.get("fruit_type") or row.get("タイプ"))
                 c_weapon = get_clean_str(row.get("weapon") or row.get("使用武器") or row.get("武器"))
 
-                # 画像パスの解決
                 resolved_img_path = None
                 IMAGE_DIRS = ["images", "img", "static/images", "assets", "data/images", "."]
                 raw_img = get_clean_str(row.get("image") or row.get("画像"))
@@ -712,7 +717,6 @@ elif selected == "キャラ名鑑":
 
                 st.markdown("---")
                 
-                # --- 【選択されたキャラクターの表示枠】 ---
                 with st.container(border=True):
                     col_img, col_info = st.columns([1, 2])
 
@@ -724,27 +728,18 @@ elif selected == "キャラ名鑑":
 
                     with col_info:
                         info_lines = []
-                        if c_name:
-                            info_lines.append(f"- **キャラクター名:** {c_name}")
-                        if c_nickname:
-                            info_lines.append(f"- **異名（通り名）:** {c_nickname}")
-                        if c_age:
-                            info_lines.append(f"- **年齢:** {c_age}")
-                        if c_birth:
-                            info_lines.append(f"- **誕生日 / 生年月日:** {c_birth}")
-                        if c_birth_place:
-                            info_lines.append(f"- **出身地:** {c_birth_place}")
-                        if c_bounty:
-                            info_lines.append(f"- **懸賞金:** {c_bounty}")
-                        if c_height:
-                            info_lines.append(f"- **身長:** {c_height}")
-                        if c_aff:
-                            info_lines.append(f"- **所属／役職:** {c_aff}")
+                        if c_name: info_lines.append(f"- **キャラクター名:** {c_name}")
+                        if c_nickname: info_lines.append(f"- **異名（通り名）:** {c_nickname}")
+                        if c_age: info_lines.append(f"- **年齢:** {c_age}")
+                        if c_birth: info_lines.append(f"- **誕生日 / 生年月日:** {c_birth}")
+                        if c_birth_place: info_lines.append(f"- **出身地:** {c_birth_place}")
+                        if c_bounty: info_lines.append(f"- **懸賞金:** {c_bounty}")
+                        if c_height: info_lines.append(f"- **身長:** {c_height}")
+                        if c_aff: info_lines.append(f"- **所属／役職:** {c_aff}")
                         if c_fruit:
                             fruit_display = f"{c_fruit} ({c_fruit_type})" if c_fruit_type else c_fruit
                             info_lines.append(f"- **悪魔の実:** {fruit_display}")
-                        if c_weapon:
-                            info_lines.append(f"- **使用武器:** {c_weapon}")
+                        if c_weapon: info_lines.append(f"- **使用武器:** {c_weapon}")
 
                         if info_lines:
                             st.markdown("\n".join(info_lines))
@@ -752,7 +747,6 @@ elif selected == "キャラ名鑑":
                 st.markdown("### 🛠️ 選択中キャラクターのデータ編集用テーブル")
                 st.caption("以下の入力欄を変更し、「保存する」ボタンを押すとExcelデータが更新されます。")
 
-                # --- 【選択されたキャラクターの編集用テーブル】 ---
                 with st.form(key=f"inline_edit_table_form_{orig_row_id}"):
                     edited_char_data = {}
                     
