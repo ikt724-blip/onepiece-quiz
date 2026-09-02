@@ -641,7 +641,7 @@ elif selected == "データ編集":
                     for col in current_data.columns:
                         val = selected_row.get(col, "")
                         val_str = "" if pd.isna(val) else str(val)
-                        edited_data[col] = st.text_input(f"【{col}】", value=val_str)
+                        edited_data[col] = st.text_input(f"【{col}】", value=val_str, key=f"edit_q_{selected_pos}_{col}")
 
                     if st.form_submit_button("💾 変更を保存する", use_container_width=True):
                         for col, new_val in edited_data.items():
@@ -692,7 +692,6 @@ elif selected == "キャラ名鑑":
                 _, row = selected_char_tuple
                 orig_row_id = int(row["_orig_row_id"])
                 
-                # 画像ファイルの列構成（characterid, name, image, bounty, birthday, age, birth_place, affiliation, weapon, nickname, devil_fruit, fruit_type）に完全一致
                 c_id = get_clean_str(row.get("characterid"))
                 c_name = get_clean_str(row.get("name"))
                 c_image = get_clean_str(row.get("image"))
@@ -753,25 +752,28 @@ elif selected == "キャラ名鑑":
                 st.markdown("### 🛠️ 選択中キャラクターのデータ編集用テーブル")
                 st.caption("以下の項目を変更し、「変更を保存する」ボタンを押すとキャラクターデータが更新されます。")
 
-                with st.form(key=f"inline_edit_table_form_{orig_row_id}"):
+                with st.form(key=f"char_edit_form_{orig_row_id}"):
                     edited_char_data = {}
-                    
                     cols_in_form = st.columns(3)
+                    
                     for idx, col in enumerate(char_data.columns):
                         target_col = cols_in_form[idx % 3]
                         with target_col:
                             val = row.get(col, "")
                             val_str = "" if pd.isna(val) else str(val)
+                            
+                            # IDは編集不可として扱う（内部的にそのまま保持）
                             if col == "characterid":
-                                edited_char_data[col] = st.text_input(f"【{col} (変更不可)】", value=val_str, disabled=True)
+                                st.text_input(f"【{col} (変更不可)】", value=val_str, disabled=True, key=f"char_in_{orig_row_id}_{col}")
+                                edited_char_data[col] = val_str
                             else:
-                                edited_char_data[col] = st.text_input(f"【{col}】", value=val_str)
+                                edited_char_data[col] = st.text_input(f"【{col}】", value=val_str, key=f"char_in_{orig_row_id}_{col}")
 
                     st.markdown("")
                     save_clicked = st.form_submit_button("💾 変更を保存する", type="primary", use_container_width=True)
 
                     if save_clicked:
                         for col, new_val in edited_char_data.items():
-                            st.session_state["char_working_df"].at[orig_row_id, col] = str(new_val)
+                            st.session_state["char_working_df"].loc[orig_row_id, col] = str(new_val)
                         st.success(f"「{c_name}」のデータを更新しました！")
                         st.rerun()
