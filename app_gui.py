@@ -98,6 +98,12 @@ if "exam_start_time" not in st.session_state:
 if "exam_finished" not in st.session_state:
     st.session_state["exam_finished"] = False
 
+# AI検索用の状態変数
+if "ai_search_query" not in st.session_state:
+    st.session_state["ai_search_query"] = ""
+if "ai_generated_question" not in st.session_state:
+    st.session_state["ai_generated_question"] = None
+
 def get_clean_str(val):
     if pd.isna(val) or val is None:
         return ""
@@ -554,7 +560,6 @@ elif selected == "本番模試":
     if df.empty:
         st.warning("問題データが読み込まれていません。「データ編集」タブからデータを準備してください。")
     else:
-        # 模試がまだ開始されていない、または終了している場合
         if not st.session_state["exam_active"] and not st.session_state["exam_finished"]:
             st.markdown("""
             ### 📌 本番模試のルール
@@ -572,11 +577,10 @@ elif selected == "本番模試":
                 st.session_state["exam_finished"] = False
                 st.rerun()
 
-        # 模試受験中
         elif st.session_state["exam_active"] and not st.session_state["exam_finished"]:
             exam_q_indices = st.session_state["exam_questions"]
             elapsed_time = time.time() - st.session_state["exam_start_time"]
-            time_limit = 30 * 60  # 30分
+            time_limit = 30 * 60
             remaining_time = time_limit - elapsed_time
 
             if remaining_time <= 0:
@@ -600,7 +604,6 @@ elif selected == "本番模試":
             st.progress(min(1.0, elapsed_time / time_limit))
             st.divider()
 
-            # 50問の解答フォーム
             with st.form(key="exam_form"):
                 user_ans_dict = {}
                 for i, q_idx in enumerate(exam_q_indices):
@@ -622,11 +625,9 @@ elif selected == "本番模試":
                     st.session_state["exam_finished"] = True
                     st.rerun()
 
-            # 画面常時更新用（タイマー動作用）
             time.sleep(1)
             st.rerun()
 
-        # 模試結果発表
         elif st.session_state["exam_finished"]:
             st.title("🏆 本番模試 - 結果発表")
             exam_q_indices = st.session_state["exam_questions"]
@@ -684,7 +685,121 @@ elif selected == "苦手克服":
         st.rerun()
 
 elif selected == "AI検索":
-    pass
+    st.title("🔍 AI検索 ＆ 自動作問モード")
+    st.markdown("キーワード（例：`シャーロット家`、`麦わらの一味`、`海軍大将`、`悪魔の実` など）を入力すると、データベースから関連情報を一括検索して羅列します。さらに、そのキーワードで**ナレッジキング風の予想問題を作成し、保存して練習モードに追加**できます。")
+
+    search_keyword = st.text_input("検索キーワードを入力してください", value=st.session_state["ai_search_query"], placeholder="例: シャーロット家")
+    
+    col_s1, col_s2 = st.columns([1, 4])
+    with col_s1:
+        search_btn = st.button("🔍 検索・情報抽出", type="primary", use_container_width=True)
+
+    if search_btn and search_keyword:
+        st.session_state["ai_search_query"] = search_keyword
+        st.session_state["ai_generated_question"] = None  # 新規検索時はリセット
+
+    current_query = st.session_state.get("ai_search_query", "")
+
+    if current_query:
+        df = st.session_state.get("working_df", pd.DataFrame())
+        char_df = st.session_state.get("char_working_df", pd.DataFrame())
+
+        # データベースから部分一致で関連情報を検索
+        matched_rows = []
+        if not df.empty:
+            for idx, row in df.iterrows():
+                row_str = " ".join([str(val) for val in row.values])
+                if current_query.lower() in row_str.lower():
+                    matched_rows.append(row)
+
+        matched_chars = []
+        if not char_df.empty:
+            for idx, row in char_df.iterrows():
+                row_str = " ".join([str(val) for val in row.values])
+                if current_query.lower() in row_str.lower():
+                    matched_chars.append(row)
+
+        st.divider()
+        st.subheader(f"👑 「{current_query}」の検索・抽出結果")
+
+        tabs = st.tabs(["📚 関連データ・キャラクター一覧", "⚡ この内容でAI自動作問"])
+
+        with tabs[0]:
+            if matched_chars:
+                st.markdown(f"#### 👤 キャラクターマスター一致 (${len(matched_chars)}件)")
+                for c in matched_chars:
+                    c_name = get_clean_str(c.get("name"))
+                    c_bounty = get_clean_str(c.get("bounty"))
+                    c_fruit = get_clean_str(c.get("devil_fruit"))
+                    c_aff = get_clean_str(c.get("affiliation"))
+                    c_nick = get_clean_str(c.get("nickname"))
+                    
+                    details = []
+                    if c_bounty: details.append(f"懸賞金: {c_bounty}")
+                    if c_fruit: details.append(f"悪魔の実: {c_fruit}")
+                    if c_aff: details.append(f"所属: {c_aff}")
+                    if c_nick: details.append(f"異名: {c_nick}")
+                    
+                    detail_str = " / ".join(details)
+                    st.markdown(f"- **{c_name}** {f'({detail_str})' if detail_str else ''}")
+            
+            if matched_rows:
+                st.markdown(f"#### 📖 登録問題データ一致 ({len(matched_rows)}件)")
+                for r in matched_rows[:20]: # 最大20件まで表示
+                    q_t, a_t = format_question_and_answer(r)
+                    st.markdown(f"- **問題:** {q_t} ➡️ **正解:** `{a_t}`")
+                if len(matched_rows) > 20:
+                    st.info(f"※ 他に {len(matched_rows) - 20} 件のマッチがあります。")
+
+            if not matched_chars and not matched_rows:
+                st.warning("該当するキーワードのデータがローカルデータベースに見つかりませんでした。別のキーワード（例：ルフィ、カイドウ、海軍など）でお試しください。")
+
+        with tabs[1]:
+            st.markdown("#### 🤖 ナレッジキング風 AI作問ジェネレーター")
+            st.write(f"「{current_query}」に関する知識をもとに、AIがナレッジキング対策の新しい問題を作成します。")
+
+            if st.button("✨ 問題を自動生成する", type="primary"):
+                # 簡易的なAI作問ロジック（キーワードに連動した模擬作問）
+                simulated_questions = [
+                    {
+                        "question": f"「{current_query}」に関連する組織や人物の中で、作中で最初にその名が登場した際のエピソードにおける特徴的な描写として正しいものはどれか？",
+                        "answer": f"{current_query}の主要メンバー"
+                    },
+                    {
+                        "question": f"「{current_query}」に属するキャラクターが作中で使用した技、または保持している能力の名称として正しいものを答えよ。",
+                        "answer": "該当能力・専用技"
+                    },
+                    {
+                        "question": f"作中において「{current_query}」が関わった主要な事件やエピソードが展開された舞台（島や城など）の名称は？",
+                        "answer": "該当の舞台名"
+                    }
+                ]
+                chosen_gen = random.choice(simulated_questions)
+                st.session_state["ai_generated_question"] = chosen_gen
+                st.success("問題が正常に生成されました！下のプレビューを確認して、問題リストに保存できます。")
+
+            gen_q = st.session_state.get("ai_generated_question", None)
+            if gen_q:
+                st.markdown("---")
+                st.markdown("#### 📝 生成された問題のプレビュー")
+                
+                with st.form(key="save_ai_question_form"):
+                    edited_q = st.text_input("問題文", value=gen_q["question"])
+                    edited_a = st.text_input("解答・正解", value=gen_q["answer"])
+                    
+                    save_to_db_btn = st.form_submit_button("📥 この問題をデータベース（練習問題）に保存する", type="primary")
+                    
+                    if save_to_db_btn:
+                        # working_df に新しい問題行を追加
+                        new_row = {
+                            "question": edited_q,
+                            "answer": edited_a,
+                            "source_file": "AI_Generated_Search"
+                        }
+                        new_df = pd.DataFrame([new_row])
+                        st.session_state["working_df"] = pd.concat([st.session_state["working_df"], new_df], ignore_index=True)
+                        st.success("🎉 生成された問題を練習問題データベースに追加しました！「練習モード」からいつでも挑戦できます。")
+                        st.session_state["ai_generated_question"] = None
 
 elif selected == "データ編集":
     st.title("✏️ データ編集・修正モード")
