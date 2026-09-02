@@ -418,47 +418,26 @@ elif selected == "練習モード":
                 if st.button("モード選択に戻る"):
                     st.session_state["practice_active"] = False
                     st.rerun()
-           elif selected == "データ編集":
-    st.title("✏️ データ編集・修正モード")
-    df = st.session_state.get("working_df", pd.DataFrame())
-    
-    if df.empty:
-        st.warning("編集するデータがありません。")
-    else:
-        # 練習モードなどから渡されたターゲットインデックスを取得（なければ0）
-        target_idx = st.session_state.get("edit_target_index", 0)
-        if target_idx is None or target_idx >= len(df):
-            target_idx = 0
+            else:
+                current_idx = st.session_state.get("practice_current_idx", target_indices[0])
+                if current_idx not in target_indices:
+                    current_idx = random.choice(target_indices)
+                    st.session_state["practice_current_idx"] = current_idx
 
-        selected_row_idx = st.number_input(
-            "編集する行インデックスを指定",
-            min_value=0,
-            max_value=len(df) - 1,
-            value=int(target_idx),  # ここで練習モードから渡されたインデックスをデフォルトにする
-            step=1
-        )
-        
-        # 一度受け取ったらセッション側のターゲットをクリア（手動変更と競合しないため）
-        st.session_state["edit_target_index"] = None
+                row = df.iloc[current_idx]
+                q_text, correct_ans = format_question_and_answer(row)
+                correct_answers_list = get_correct_answers_list(row, correct_ans)
 
-        st.markdown(f"--- \n### 📝 インデックス [{selected_row_idx}] の編集")
-        row_data = df.iloc[selected_row_idx]
-
-        with st.form(key="edit_form"):
-            updated_values = {}
-            for col in df.columns:
-                if col == "source_file":
-                    continue
-                val = str(row_data[col]) if pd.notna(row_data[col]) else ""
-                updated_values[col] = st.text_input(f"列: {col}", value=val)
-
-            save_btn = st.form_submit_button("💾 変更を保存する", type="primary")
-            if save_btn:
-                for col, val in updated_values.items():
-                    st.session_state["working_df"].at[selected_row_idx, col] = val
-                st.success(f"インデックス [{selected_row_idx}] のデータを更新しました！")
-                time.sleep(0.8)
-                st.rerun()
+                st.markdown(f"**【問題 ID / インデックス: {current_idx}】**")
+                
+                col_q_title, col_edit_btn = st.columns([5, 1])
+                with col_q_title:
+                    st.subheader(q_text)
+                with col_edit_btn:
+                    if st.button("✏️ この問題を修正", key=f"edit_jump_{current_idx}", help="データ編集モードを開いてこの問題を修正します"):
+                        st.session_state["edit_target_index"] = current_idx
+                        st.session_state["current_nav"] = "データ編集"
+                        st.rerun()
 
                 display_question_image(row, width=250)
 
