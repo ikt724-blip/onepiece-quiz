@@ -1,4 +1,5 @@
 import base64
+import datetime
 import glob
 import io
 import os
@@ -84,6 +85,18 @@ if "inline_edit_index" not in st.session_state:
 
 if "last_judge_result" not in st.session_state:
     st.session_state["last_judge_result"] = None
+
+# 本番模試用の状態変数
+if "exam_active" not in st.session_state:
+    st.session_state["exam_active"] = False
+if "exam_questions" not in st.session_state:
+    st.session_state["exam_questions"] = []
+if "exam_user_answers" not in st.session_state:
+    st.session_state["exam_user_answers"] = {}
+if "exam_start_time" not in st.session_state:
+    st.session_state["exam_start_time"] = None
+if "exam_finished" not in st.session_state:
+    st.session_state["exam_finished"] = False
 
 def get_clean_str(val):
     if pd.isna(val) or val is None:
@@ -454,7 +467,6 @@ elif selected == "練習モード":
 
                 answered_state = st.session_state.get("practice_answered", False)
 
-                # --- 判定結果の表示（rerunの前にセッションに保持して確実に描画） ---
                 if answered_state and st.session_state.get("last_judge_result"):
                     res = st.session_state["last_judge_result"]
                     if res["is_correct"]:
@@ -496,7 +508,6 @@ elif selected == "練習モード":
                         if next_btn:
                             st.session_state["practice_current_idx"] = random.choice(target_indices)
                             st.session_state["practice_answered"] = False
-                            st.session_state["inline_edit_index"] = None
                             st.session_state["last_judge_result"] = None
                             st.rerun()
                         elif stop_btn:
@@ -537,7 +548,133 @@ elif selected == "練習モード":
                             st.rerun()
 
 elif selected == "本番模試":
-    pass
+    st.title("🏆 本番模試モード")
+    df = st.session_state.get("working_df", pd.DataFrame())
+
+    if df.empty:
+        st.warning("問題データが読み込まれていません。「データ編集」タブからデータを準備してください。")
+    else:
+        # 模試がまだ開始されていない、または終了している場合
+        if not st.session_state["exam_active"] and not st.session_state["exam_finished"]:
+            st.markdown("""
+            ### 📌 本番模試のルール
+            * **問題数**: ランダムに抽出された **50問**
+            * **制限時間**: **30分**
+            * **形式**: 全問に解答したあと、または時間切れになった後に、一括で採点結果と正答が表示されます。
+            """)
+            st.write("")
+            if st.button("🚀 本番模試を開始する", type="primary", use_container_width=True):
+                sample_size = min(50, len(df))
+                st.session_state["exam_questions"] = random.sample(list(range(len(df))), sample_size)
+                st.session_state["exam_user_answers"] = {}
+                st.session_state["exam_start_time"] = time.time()
+                st.session_state["exam_active"] = True
+                st.session_state["exam_finished"] = False
+                st.rerun()
+
+        # 模試受験中
+        elif st.session_state["exam_active"] and not st.session_state["exam_finished"]:
+            exam_q_indices = st.session_state["exam_questions"]
+            elapsed_time = time.time() - st.session_state["exam_start_time"]
+            time_limit = 30 * 60  # 30分
+            remaining_time = time_limit - elapsed_time
+
+            if remaining_time <= 0:
+                st.session_state["exam_active"] = False
+                st.session_state["exam_finished"] = True
+                st.warning("⏱️ 制限時間が終了しました。自動的に結果を集計します。")
+                st.rerun()
+
+            mins = int(remaining_time // 60)
+            secs = int(remaining_time % 60)
+
+            col_h1, col_h2 = st.columns([3, 1])
+            with col_h1:
+                st.markdown(f"**残り時間:** ⏳ **{mins:02d}分 {secs:02d}秒**")
+            with col_h2:
+                if st.button("⏹️ 模試を中断・採点する", type="secondary", use_container_width=True):
+                    st.session_state["exam_active"] = False
+                    st.session_state["exam_finished"] = True
+                    st.rerun()
+
+            st.progress(min(1.0, elapsed_time / time_limit))
+            st.divider()
+
+            # 50問の解答フォーム
+            with st.form(key="exam_form"):
+                user_ans_dict = {}
+                for i, q_idx in enumerate(exam_q_indices):
+                    row = df.iloc[q_idx]
+                    q_text, _ = format_question_and_answer(row)
+                    st.markdown(f"**第 {i+1} 問** (ID: {q_idx})")
+                    st.markdown(f"> {q_text}")
+                    display_question_image(row, width=150)
+                    
+                    prev_ans = st.session_state["exam_user_answers"].get(q_idx, "")
+                    user_ans_dict[q_idx] = st.text_input(f"解答 (第 {i+1} 問)", value=prev_ans, key=f"exam_q_{q_idx}")
+                    st.write("")
+
+                submit_exam = st.form_submit_button("📝 すべて解答して採点する", type="primary", use_container_width=True)
+                if submit_exam:
+                    for q_idx, ans in user_ans_dict.items():
+                        st.session_state["exam_user_answers"][q_idx] = ans
+                    st.session_state["exam_active"] = False
+                    st.session_state["exam_finished"] = True
+                    st.rerun()
+
+            # 画面常時更新用（タイマー動作用）
+            time.sleep(1)
+            st.rerun()
+
+        # 模試結果発表
+        elif st.session_state["exam_finished"]:
+            st.title("🏆 本番模試 - 結果発表")
+            exam_q_indices = st.session_state["exam_questions"]
+            user_answers = st.session_state["exam_user_answers"]
+
+            correct_count = 0
+            results_data = []
+
+            for i, q_idx in enumerate(exam_q_indices):
+                row = df.iloc[q_idx]
+                q_text, correct_ans_str = format_question_and_answer(row)
+                correct_answers_list = get_correct_answers_list(row, correct_ans_str)
+                user_ans = user_answers.get(q_idx, "")
+
+                is_correct = check_answers_multi([user_ans], correct_answers_list)
+                if is_correct:
+                    correct_count += 1
+
+                results_data.append({
+                    "番号": i + 1,
+                    "問題": q_text,
+                    "あなたの解答": user_ans if user_ans else "(未解答)",
+                    "正解": " / ".join(correct_answers_list),
+                    "判定": "⭕ 正解" if is_correct else "❌ 不正解"
+                })
+
+            score_rate = (correct_count / len(exam_q_indices)) * 100 if exam_q_indices else 0
+            st.metric(label="📊 総合スコア", value=f"{correct_count} / {len(exam_q_indices)} 問正解 ({score_rate:.1f}%)")
+            
+            if score_rate >= 80:
+                st.success("🎉 お見事！素晴らしい正解率です。ナレッジキング王座も狙えます！")
+            elif score_rate >= 50:
+                st.info("👍 良い調子です！苦手な部分を復習してさらに精度を高めましょう。")
+            else:
+                st.warning("🔥 まだまだ伸び代があります！「練習モード」や「苦手克服」を活用して知識を定着させましょう。")
+
+            st.divider()
+            st.subheader("📋 詳細結果一覧")
+            results_df = pd.DataFrame(results_data)
+            st.dataframe(results_df, hide_index=True, use_container_width=True)
+
+            st.write("")
+            if st.button("🔄 もう一度模試に挑戦する", type="primary", use_container_width=True):
+                st.session_state["exam_active"] = False
+                st.session_state["exam_finished"] = False
+                st.session_state["exam_questions"] = []
+                st.session_state["exam_user_answers"] = {}
+                st.rerun()
 
 elif selected == "苦手克服":
     st.title("🔥 苦手克服モード")
