@@ -206,7 +206,10 @@ if "current_nav" not in st.session_state:
 
 with st.sidebar:
     st.header("🏴‍☠️ ナビセンター")
-    def_idx = menu_options.index(st.session_state["current_nav"]) if st.session_state["current_nav"] in menu_options else 0
+    
+    # 選択状態を反映するため、明示的にインデックスを取得
+    current_selection = st.session_state["current_nav"]
+    def_idx = menu_options.index(current_selection) if current_selection in menu_options else 0
 
     selected = option_menu(
         menu_title=None,
@@ -301,17 +304,14 @@ if selected == "ホーム":
     with q_col1:
         if st.button("📖 練習モードを始める", use_container_width=True, type="primary"):
             st.session_state["current_nav"] = "練習モード"
-            st.session_state["main_menu_nav"] = "練習モード"
             st.rerun()
     with q_col2:
         if st.button("🏆 本番模試に挑戦する", use_container_width=True):
             st.session_state["current_nav"] = "本番模試"
-            st.session_state["main_menu_nav"] = "本番模試"
             st.rerun()
     with q_col3:
         if st.button("🔥 苦手克服モードへ", use_container_width=True):
             st.session_state["current_nav"] = "苦手克服"
-            st.session_state["main_menu_nav"] = "苦手克服"
             st.rerun()
 
 elif selected == "練習モード":
@@ -435,11 +435,10 @@ elif selected == "練習モード":
                 with col_q_title:
                     st.subheader(q_text)
                 with col_edit_btn:
-                    # 修正ボタン：問題のインデックスをセットし、ナビゲーションのメニュー選択自体を「データ編集」に同期させて即座にジャンプ
+                    # 修正ボタン：問題のインデックスをセットし、current_navを変更して即座にジャンプ
                     if st.button("✏️ この問題を修正", key=f"edit_jump_{current_idx}", help="データ編集モードを開いてこの問題を修正します"):
                         st.session_state["edit_target_index"] = current_idx
                         st.session_state["current_nav"] = "データ編集"
-                        st.session_state["main_menu_nav"] = "データ編集"
                         st.rerun()
 
                 display_question_image(row, width=250)
@@ -482,7 +481,6 @@ elif selected == "苦手克服":
     st.info("「練習モード」の中に苦手克服機能が統合されました。左側のメニューから「練習モード」を選択し、「🔥 苦手・不正解集中特訓」をご利用ください。")
     if st.button("練習モードへ移動する", type="primary"):
         st.session_state["current_nav"] = "練習モード"
-        st.session_state["main_menu_nav"] = "練習モード"
         st.rerun()
 
 elif selected == "AI検索":
