@@ -185,7 +185,7 @@ def format_question_and_answer(q):
 menu_options = [
     "ホーム",
     "練習モード",
-    "本番模試",
+    "本番模试",
     "苦手克服",
     "AI検索",
     "データ編集",
@@ -209,7 +209,7 @@ with st.sidebar:
     
     st.session_state["current_nav"] = selected
     
-    # ▼【改善案】ナビセンター下部に簡易スタッツ（総問題数・苦手問題数）を常時表示
+    # ナビセンター下部の学習ステータス表示
     st.divider()
     st.markdown("### 📊 学習ステータス")
     current_total_q = len(st.session_state.get("working_df", pd.DataFrame()))
@@ -233,7 +233,6 @@ if selected == "ホーム":
     wt100_full_html = ""
 
     if all_imgs:
-        # ▼【改善案】画像読み込み過多による描画負荷を軽減するため最大20枚に制限
         sample_imgs = random.sample(all_imgs, min(len(all_imgs), 20))
         NUM_COLS = 6
         columns_b64 = [[] for _ in range(NUM_COLS)]
@@ -288,7 +287,6 @@ if selected == "ホーム":
     else:
         st.warning("表示できる画像ファイルが見つかりません。")
 
-    # ▼【改善案】ホーム画面直下からのクイックダイレクトアクセス導線を追加
     st.write("")
     st.subheader("⚡ クイックアクセス")
     q_col1, q_col2, q_col3 = st.columns(3)
@@ -306,29 +304,23 @@ if selected == "ホーム":
             st.rerun()
 
 elif selected == "練習モード":
-    # (既存の練習モードコード[cite: 1] はそのまま保持)
     pass
 
 elif selected == "本番模試":
-    # (既存の本番模試コード[cite: 1] はそのまま保持)
     pass
 
 elif selected == "苦手克服":
-    # (既存の苦手克服モードコード[cite: 1] はそのまま保持)
     pass
 
 elif selected == "AI検索":
-    # (既存のAI検索モードコード[cite: 1] はそのまま保持)
     pass
 
 elif selected == "データ編集":
-    # (既存のデータ編集コード[cite: 1] はそのまま保持)
     pass
 
 elif selected == "キャラ名鑑":
-    # (既存のキャラ名鑑コード[cite: 1] はそのまま保持)
     pass
-```[cite: 1]
+    
 elif selected == "練習モード":
     st.title("📖 練習モード")
     st.caption("自分のペースで苦手克服！出題条件を自由にカスタマイズして挑戦しましょう。")
