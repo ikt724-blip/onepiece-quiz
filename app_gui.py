@@ -339,7 +339,7 @@ elif selected == "練習モード":
                 c_top1, c_top2 = st.columns([3, 1])
                 with c_top1: st.markdown(f"### 第 {curr_idx + 1} 問 / 全 {total_q} 問")
                 with c_top2:
-                    # ▼【完全修正】ボタンが独立して動作するように独立キーを付与
+                    # ▼【完全修正】クリック時に確実にインデックスを保持してデータ編集画面へジャンプ
                     if st.button("🛠️ この問題を修正する", key=f"btn_edit_q_{curr_idx}_independent"):
                         orig_idx = q.get("_original_index")
                         if orig_idx is not None:
@@ -347,8 +347,6 @@ elif selected == "練習モード":
                         else:
                             st.session_state["target_edit_global_index"] = curr_idx
                         
-                        st.session_state.practice_started = False
-                        st.session_state["edit_active_tab"] = 1
                         st.session_state["data_edit_tab_radio"] = "✏️ 2. データの編集・削除"
                         st.session_state["current_nav"] = "データ編集"
                         st.rerun()
@@ -556,16 +554,8 @@ elif selected == "データ編集":
     st.title("➕ データ追加・編集")
     tab_titles = ["📝 1. データの新規追加", "✏️ 2. データの編集・削除"]
 
-    if "edit_active_tab" in st.session_state:
-        req_tab = st.session_state.pop("edit_active_tab")
-        if isinstance(req_tab, int) and 0 <= req_tab < len(tab_titles):
-            st.session_state["data_edit_tab_radio"] = tab_titles[req_tab]
-
-    if "target_edit_global_index" in st.session_state or "edit_target_index" in st.session_state:
-        st.session_state["data_edit_tab_radio"] = tab_titles[1]
-
     if "data_edit_tab_radio" not in st.session_state or st.session_state["data_edit_tab_radio"] not in tab_titles:
-        st.session_state["data_edit_tab_radio"] = tab_titles[0]
+        st.session_state["data_edit_tab_radio"] = tab_titles[1] if "target_edit_global_index" in st.session_state else tab_titles[0]
 
     tab_selection = st.radio("操作を選択してください", tab_titles, key="data_edit_tab_radio", horizontal=True)
 
@@ -611,11 +601,7 @@ elif selected == "データ編集":
     elif tab_selection == "✏️ 2. データの編集・削除":
         st.subheader("🛠️ 問題修正・削除フォーム")
         
-        target_idx = None
-        if "target_edit_global_index" in st.session_state:
-            target_idx = st.session_state.pop("target_edit_global_index")
-        elif "edit_target_index" in st.session_state:
-            target_idx = st.session_state.pop("edit_target_index")
+        target_idx = st.session_state.pop("target_edit_global_index", None)
 
         forced_pos = None
         if target_idx is not None:
