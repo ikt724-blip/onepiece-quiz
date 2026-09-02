@@ -39,15 +39,12 @@ def load_all_data():
 
 df_all = load_all_data()
 
-# アプリ全体で共有する「作業用データフレーム」の初期化
 if "working_df" not in st.session_state or st.session_state["working_df"].empty:
     st.session_state["working_df"] = df_all.copy().reset_index(drop=True)
 
-# 苦手問題管理用のリスト（間違えた問題のインデックスを保持）
 if "wrong_q_indices" not in st.session_state:
     st.session_state["wrong_q_indices"] = set()
 
-# 共通ヘルパー関数
 def get_clean_str(val):
     if pd.isna(val) or val is None:
         return ""
@@ -612,20 +609,19 @@ elif selected == "データ編集":
                     st.rerun()
 
 elif selected == "キャラ名鑑":
-    st.title("🏴 キャラクター名鑑")
+    st.title("🏴‍☠️ キャラクター名鑑")
     st.caption("検索または選択して、キャラクターの詳細情報と画像を確認できます。")
     st.markdown("---")
 
     if current_data.empty:
         st.info("登録されているデータがありません。")
     else:
-        # 検索ボックスの追加
-        search_keyword = st.text_input("🔍 キャラクター検索（名前・所属・問題文などで絞り込み）", placeholder="例: ルフィ、海賊団 など")
+        # 上部に検索欄とプルダウンを配置
+        search_keyword = st.text_input("🔍 キャラクター名検索欄", placeholder="例: ルフィ、海賊団 など")
 
         char_df = current_data.copy()
         char_df["_orig_row_id"] = char_df.index
 
-        # 検索キーワードによる絞り込み
         if search_keyword:
             mask = char_df.astype(str).apply(lambda x: x.str.contains(search_keyword, case=False, na=False)).any(axis=1)
             char_df = char_df[mask]
@@ -636,24 +632,23 @@ elif selected == "キャラ名鑑":
             def make_char_label(idx_row):
                 _, row = idx_row
                 orig_id = int(row["_orig_row_id"])
-                
-                # 複数候補から確実に名前を取得する
                 c_name = ""
-                for col in ["name", "名前", "キャラ名", "Name", "question", "問題"]:
+                for col in ["answer", "解答", "正解", "name", "名前", "キャラ名", "Name"]:
                     val = get_clean_str(row.get(col))
                     if val:
                         c_name = val
                         break
                 if not c_name:
+                    c_name = get_clean_str(row.get("question") or row.get("問題"))
+                if not c_name:
                     c_name = f"データ No.{orig_id + 1}"
-                
                 c_aff = get_clean_str(row.get("affiliation") or row.get("所属"))
                 aff_str = f" ({c_aff})" if c_aff else ""
                 return f"{c_name}{aff_str} [No.{orig_id + 1}]"
 
             char_options = list(char_df.iterrows())
             selected_char_tuple = st.selectbox(
-                "🔍 表示するキャラクターを選択",
+                "キャラクター名プルダウン",
                 options=char_options,
                 format_func=lambda x: make_char_label(x)
             )
@@ -662,19 +657,23 @@ elif selected == "キャラ名鑑":
                 _, row = selected_char_tuple
                 orig_row_id = int(row["_orig_row_id"])
                 
-                # 名前の取得を堅牢化
                 c_name = ""
-                for col in ["name", "名前", "キャラ名", "Name", "question", "問題"]:
+                for col in ["answer", "解答", "正解", "name", "名前", "キャラ名", "Name"]:
                     val = get_clean_str(row.get(col))
                     if val:
                         c_name = val
                         break
                 if not c_name:
+                    c_name = get_clean_str(row.get("question") or row.get("問題"))
+                if not c_name:
                     c_name = f"データ No.{orig_row_id + 1}"
 
-                c_nick = get_clean_str(row.get("nickname") or row.get("異名") or row.get("通り名"))
-                c_aff = get_clean_str(row.get("affiliation") or row.get("所属") or row.get("組織"))
-                c_fruit = get_clean_str(row.get("devil_fruit") or row.get("悪魔の実") or row.get("answer") or row.get("解答"))
+                # 各項目の取得
+                c_birth = get_clean_str(row.get("birthday") or row.get("誕生日"))
+                c_birth_place = get_clean_str(row.get("birth_place") or row.get("出身") or row.get("出身地"))
+                c_aff = get_clean_str(row.get("affiliation") or row.get("所属") or row.get("組織") or row.get("役職"))
+                c_fruit = get_clean_str(row.get("devil_fruit") or row.get("悪魔の実") or row.get("能力"))
+                c_weapon = get_clean_str(row.get("weapon") or row.get("使用武器") or row.get("武器"))
                 c_desc = get_clean_str(row.get("explanation") or row.get("解説"))
 
                 # 画像パスの解決
@@ -702,29 +701,43 @@ elif selected == "キャラ名鑑":
                                 break
 
                 st.markdown("---")
-                col_img, col_info = st.columns([1, 2])
+                
+                # 画像と詳細情報をカード風の枠内に表示
+                with st.container(border=True):
+                    col_img, col_info = st.columns([1, 2])
 
-                with col_img:
-                    if resolved_img_path:
-                        st.image(resolved_img_path, use_container_width=True)
-                    else:
-                        st.info("🖼️ 画像なし")
+                    with col_img:
+                        if resolved_img_path:
+                            st.image(resolved_img_path, use_container_width=True)
+                        else:
+                            st.info("🖼️ 画像なし")
 
-                with col_info:
-                    st.markdown(f"## {c_name}")
-                    if c_nick:
-                        st.markdown(f"**異名:** {c_nick}")
-                    if c_aff:
-                        st.markdown(f"**所属:** {c_aff}")
-                    if c_fruit:
-                        st.markdown(f"**悪魔の実/能力:** {c_fruit}")
-                    if c_desc:
-                        st.markdown(f"**詳細・解説:**\n{c_desc}")
+                    with col_info:
+                        st.markdown(f"### 🏴‍☠️ {c_name}")
+                        
+                        # 箇条書きリストを作成（空欄の項目は自動非表示）
+                        info_lines = []
+                        if c_birth:
+                            info_lines.append(f"- **誕生日:** {c_birth}")
+                        if c_birth_place:
+                            info_lines.append(f"- **出身:** {c_birth_place}")
+                        if c_aff:
+                            info_lines.append(f"- **所属／役職:** {c_aff}")
+                        if c_fruit:
+                            info_lines.append(f"- **悪魔の実:** {c_fruit}")
+                        if c_weapon:
+                            info_lines.append(f"- **使用武器:** {c_weapon}")
 
-                    st.markdown("")
-                    if st.button("✏️ このデータを編集する", key=f"btn_edit_char_{orig_row_id}", type="primary"):
-                        st.session_state["target_edit_global_index"] = orig_row_id
-                        st.session_state["edit_active_tab"] = 1
-                        st.session_state["data_edit_tab_radio"] = "✏️ 2. データの編集・削除"
-                        st.session_state["current_nav"] = "データ編集"
-                        st.rerun()
+                        if info_lines:
+                            st.markdown("\n".join(info_lines))
+
+                        if c_desc:
+                            st.markdown(f"\n**【詳細・解説】**\n{c_desc}")
+
+                        st.markdown("")
+                        if st.button("✏️ このデータを編集する", key=f"btn_edit_char_{orig_row_id}", type="primary"):
+                            st.session_state["target_edit_global_index"] = orig_row_id
+                            st.session_state["edit_active_tab"] = 1
+                            st.session_state["data_edit_tab_radio"] = "✏️ 2. データの編集・削除"
+                            st.session_state["current_nav"] = "データ編集"
+                            st.rerun()
