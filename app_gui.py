@@ -754,7 +754,8 @@ elif selected == "キャラ名鑑":
                     save_clicked = st.form_submit_button("💾 変更を保存する", type="primary", use_container_width=True)
 
                     if save_clicked:
+                        # 確実にPandasの行としてオブジェクト判定に巻き込まれないよう loc を利用して個別に代入
                         for col, new_val in edited_char_data.items():
-                            st.session_state["char_working_df"].at[orig_row_id, col] = new_val
+                            st.session_state["char_working_df"].loc[orig_row_id, col] = new_val
                         st.success(f"「{c_name}」のデータを更新しました！")
                         st.rerun()
