@@ -347,7 +347,8 @@ elif selected == "練習モード":
                         else:
                             st.session_state["target_edit_global_index"] = curr_idx
                         
-                        st.session_state["data_edit_tab_radio"] = "✏️ 2. データの編集・削除"
+                        # ラジオボタンの値を直接操作するのではなく、専用の遷移フラグを立ててタブ選択に反映させる
+                        st.session_state["data_edit_tab_choice"] = "✏️ 2. データの編集・削除"
                         st.session_state["current_nav"] = "データ編集"
                         st.rerun()
 
@@ -554,7 +555,11 @@ elif selected == "データ編集":
     st.title("➕ データ追加・編集")
     tab_titles = ["📝 1. データの新規追加", "✏️ 2. データの編集・削除"]
 
-    if "data_edit_tab_radio" not in st.session_state or st.session_state["data_edit_tab_radio"] not in tab_titles:
+    # ▼【完全修正】ラジオボタンのバインド競合を防ぐため、遷移先の初期決定ロジックを安全に分離
+    if "data_edit_tab_choice" in st.session_state:
+        # 修正ボタンなどから明示的な指示がある場合はそれを一度だけ採用して反映
+        st.session_state["data_edit_tab_radio"] = st.session_state.pop("data_edit_tab_choice")
+    elif "data_edit_tab_radio" not in st.session_state:
         st.session_state["data_edit_tab_radio"] = tab_titles[1] if "target_edit_global_index" in st.session_state else tab_titles[0]
 
     tab_selection = st.radio("操作を選択してください", tab_titles, key="data_edit_tab_radio", horizontal=True)
