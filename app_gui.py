@@ -73,13 +73,14 @@ st.session_state["char_working_df"] = deep_clean_dataframe(st.session_state["cha
 if "wrong_q_indices" not in st.session_state:
     st.session_state["wrong_q_indices"] = set()
 
-# 学習履歴トラッキング用のステート初期化
 if "quiz_stats" not in st.session_state:
-    st.session_state["quiz_stats"] = {} # {index: {"total": int, "correct": int}}
+    st.session_state["quiz_stats"] = {}
 
-# 編集対象インデックスの初期化
 if "edit_target_index" not in st.session_state:
     st.session_state["edit_target_index"] = None
+
+if "practice_active" not in st.session_state:
+    st.session_state["practice_active"] = False
 
 def get_clean_str(val):
     if pd.isna(val) or val is None:
@@ -317,144 +318,164 @@ elif selected == "練習モード":
     if df.empty:
         st.warning("問題データが読み込まれていません。「データ編集」タブからデータを準備してください。")
     else:
-        # --- 習熟度集計と円グラフ表示 ---
-        stats = st.session_state.get("quiz_stats", {})
-        wrong_set = st.session_state.get("wrong_q_indices", set())
-        
-        mastered_count = 0
-        learning_count = 0
-        weak_count = 0
-        untested_count = 0
-        
-        for idx in range(len(df)):
-            if idx in wrong_set:
-                weak_count += 1
-            elif idx in stats:
-                st_data = stats[idx]
-                total = st_data.get("total", 0)
-                correct = st_data.get("correct", 0)
-                if total > 0:
-                    rate = correct / total
-                    if rate >= 0.8:
-                        mastered_count += 1
+        # 練習セッションが未開始の場合は「モード選択・円グラフ画面」を表示
+        if not st.session_state["practice_active"]:
+            stats = st.session_state.get("quiz_stats", {})
+            wrong_set = st.session_state.get("wrong_q_indices", set())
+            
+            mastered_count = 0
+            learning_count = 0
+            weak_count = 0
+            untested_count = 0
+            
+            for idx in range(len(df)):
+                if idx in wrong_set:
+                    weak_count += 1
+                elif idx in stats:
+                    st_data = stats[idx]
+                    total = st_data.get("total", 0)
+                    correct = st_data.get("correct", 0)
+                    if total > 0:
+                        rate = correct / total
+                        if rate >= 0.8:
+                            mastered_count += 1
+                        else:
+                            learning_count += 1
                     else:
-                        learning_count += 1
+                        untested_count += 1
                 else:
                     untested_count += 1
-            else:
-                untested_count += 1
 
-        col_g1, col_g2 = st.columns([1, 2])
-        with col_g1:
-            st.markdown("### 📊 習熟度バランス")
-            summary_df = pd.DataFrame({
-                "状態": ["得意 (正答率80%~)", "学習中", "苦手・不正解", "未挑戦"],
-                "問題数": [mastered_count, learning_count, weak_count, untested_count]
-            })
-            st.dataframe(summary_df, hide_index=True, use_container_width=True)
-            
-        with col_g2:
-            import altair as alt
-            chart_data = summary_df[summary_df["問題数"] > 0]
-            if not chart_data.empty:
-                pie_chart = alt.Chart(chart_data).mark_arc(innerRadius=50).encode(
-                    theta=alt.Theta(field="問題数", type="quantitative"),
-                    color=alt.Color(field="状態", type="nominal", scale=alt.Scale(scheme="category10")),
-                    tooltip=["状態", "問題数"]
-                ).properties(height=220)
-                st.altair_chart(pie_chart, use_container_width=True)
-            else:
-                st.info("まだ回答データがありません。問題を解くと円グラフに反映されます。")
-
-        st.divider()
-
-        # --- 出題モード選択タブ ---
-        mode_tab = st.radio(
-            "出題モードを選択",
-            ["ランダム出題", "🔥 苦手・不正解集中特訓", "🎯 スマート自動振り分け（弱点優先）"],
-            horizontal=True
-        )
-
-        # ターゲットインデックスの抽出
-        target_indices = []
-        if mode_tab == "ランダム出題":
-            target_indices = list(range(len(df)))
-        elif mode_tab == "🔥 苦手・不正解集中特訓":
-            target_indices = list(wrong_set)
-            if not target_indices:
-                st.success("現在、苦手・不正解に登録されている問題はありません！素晴らしいです！")
-        else:
-            # スマート自動振り分け：未挑戦または苦手な問題を優先的に集める
-            untested_or_weak = [i for i in range(len(df)) if i in wrong_set or i not in stats or (stats[i].get("correct", 0)/max(1, stats[i].get("total", 1)) < 0.6)]
-            target_indices = untested_or_weak if untested_or_weak else list(range(len(df)))
-
-        if target_indices:
-            if "practice_current_idx" not in st.session_state or st.session_state.get("practice_mode_sel") != mode_tab:
-                st.session_state["practice_mode_sel"] = mode_tab
-                st.session_state["practice_current_idx"] = random.choice(target_indices)
-                st.session_state["practice_answered"] = False
-
-            current_idx = st.session_state.get("practice_current_idx", target_indices[0])
-            if current_idx not in target_indices:
-                current_idx = random.choice(target_indices)
-                st.session_state["practice_current_idx"] = current_idx
-
-            row = df.iloc[current_idx]
-            q_text, correct_ans = format_question_and_answer(row)
-            correct_answers_list = get_correct_answers_list(row, correct_ans)
-
-            st.markdown(f"**【問題 ID / インデックス: {current_idx}】**")
-            
-            # --- 修正ボタンの配置（データ編集モードへダイレクト遷移） ---
-            col_q_title, col_edit_btn = st.columns([5, 1])
-            with col_q_title:
-                st.subheader(q_text)
-            with col_edit_btn:
-                if st.button("✏️ この問題を修正", key=f"edit_jump_{current_idx}", help="データ編集モードを開いてこの問題を修正します"):
-                    st.session_state["edit_target_index"] = current_idx
-                    st.session_state["current_nav"] = "データ編集"
-                    st.rerun()
-
-            display_question_image(row, width=250)
-
-            user_input = st.text_input("解答を入力してください:", key=f"practice_input_{current_idx}")
-
-            col_sub1, col_sub2 = st.columns([1, 4])
-            with col_sub1:
-                submit_btn = st.button("解答する", type="primary", key=f"practice_submit_{current_idx}")
-
-            if submit_btn:
-                st.session_state["practice_answered"] = True
-                # 統計の更新
-                if current_idx not in st.session_state["quiz_stats"]:
-                    st.session_state["quiz_stats"][current_idx] = {"total": 0, "correct": 0}
-                st.session_state["quiz_stats"][current_idx]["total"] += 1
-
-                # 判定
-                is_correct = False
-                if user_input:
-                    is_correct = check_answers_multi([user_input], correct_answers_list)
+            col_g1, col_g2 = st.columns([1, 2])
+            with col_g1:
+                st.markdown("### 📊 習熟度バランス")
+                summary_df = pd.DataFrame({
+                    "状態": ["得意 (正答率80%~)", "学習中", "苦手・不正解", "未挑戦"],
+                    "問題数": [mastered_count, learning_count, weak_count, untested_count]
+                })
+                st.dataframe(summary_df, hide_index=True, use_container_width=True)
                 
-                if is_correct:
-                    st.session_state["quiz_stats"][current_idx]["correct"] += 1
-                    if current_idx in st.session_state["wrong_q_indices"]:
-                        st.session_state["wrong_q_indices"].remove(current_idx)
-                    st.success("🎉 正解です！お見事！")
+            with col_g2:
+                import altair as alt
+                chart_data = summary_df[summary_df["問題数"] > 0]
+                if not chart_data.empty:
+                    pie_chart = alt.Chart(chart_data).mark_arc(innerRadius=50).encode(
+                        theta=alt.Theta(field="問題数", type="quantitative"),
+                        color=alt.Color(field="状態", type="nominal", scale=alt.Scale(scheme="category10")),
+                        tooltip=["状態", "問題数"]
+                    ).properties(height=220)
+                    st.altair_chart(pie_chart, use_container_width=True)
                 else:
-                    st.session_state["wrong_q_indices"].add(current_idx)
-                    st.error(f"❌ 残念！不正解です。正解は: 『 {' / '.join(correct_answers_list)} 』 です。")
+                    st.info("まだ回答データがありません。問題を解くと円グラフに反映されます。")
 
-            if st.session_state.get("practice_answered", False):
-                if st.button("次の問題へ ➡️", key=f"next_q_{current_idx}"):
-                    st.session_state["practice_current_idx"] = random.choice(target_indices)
+            st.divider()
+
+            st.subheader("⚙️ 出題設定")
+            mode_tab = st.radio(
+                "出題モードを選択",
+                ["ランダム出題", "🔥 苦手・不正解集中特訓", "🎯 スマート自動振り分け（弱点優先）"],
+                horizontal=True
+            )
+            
+            st.write("")
+            if st.button("🚀 練習をスタートする", type="primary", use_container_width=True):
+                if mode_tab == "ランダム出題":
+                    targets = list(range(len(df)))
+                elif mode_tab == "🔥 苦手・不正解集中特訓":
+                    targets = list(wrong_set)
+                else:
+                    targets = [i for i in range(len(df)) if i in wrong_set or i not in stats or (stats[i].get("correct", 0)/max(1, stats[i].get("total", 1)) < 0.6)]
+                    if not targets:
+                        targets = list(range(len(df)))
+                
+                if mode_tab == "🔥 苦手・不正解集中特訓" and not targets:
+                    st.error("現在、苦手・不正解に登録されている問題はありません！")
+                else:
+                    st.session_state["practice_targets"] = targets
+                    st.session_state["practice_mode_sel"] = mode_tab
+                    st.session_state["practice_current_idx"] = random.choice(targets)
                     st.session_state["practice_answered"] = False
+                    st.session_state["practice_active"] = True
                     st.rerun()
+
+        else:
+            # --- 練習セッション開始後の「問題解答画面」 ---
+            target_indices = st.session_state.get("practice_targets", list(range(len(df))))
+            mode_name = st.session_state.get("practice_mode_sel", "ランダム出題")
+
+            col_top1, col_top2 = st.columns([4, 1])
+            with col_top1:
+                st.markdown(f"**現在のモード:** `{mode_name}` （対象問題数: {len(target_indices)}問）")
+            with col_top2:
+                if st.button("⬅️ モード選択に戻る"):
+                    st.session_state["practice_active"] = False
+                    st.rerun()
+
+            st.divider()
+
+            if not target_indices:
+                st.warning("出題できる問題がありません。")
+                if st.button("モード選択に戻る"):
+                    st.session_state["practice_active"] = False
+                    st.rerun()
+            else:
+                current_idx = st.session_state.get("practice_current_idx", target_indices[0])
+                if current_idx not in target_indices:
+                    current_idx = random.choice(target_indices)
+                    st.session_state["practice_current_idx"] = current_idx
+
+                row = df.iloc[current_idx]
+                q_text, correct_ans = format_question_and_answer(row)
+                correct_answers_list = get_correct_answers_list(row, correct_ans)
+
+                st.markdown(f"**【問題 ID / インデックス: {current_idx}】**")
+                
+                col_q_title, col_edit_btn = st.columns([5, 1])
+                with col_q_title:
+                    st.subheader(q_text)
+                with col_edit_btn:
+                    if st.button("✏️ この問題を修正", key=f"edit_jump_{current_idx}", help="データ編集モードを開いてこの問題を修正します"):
+                        st.session_state["edit_target_index"] = current_idx
+                        st.session_state["current_nav"] = "データ編集"
+                        st.rerun()
+
+                display_question_image(row, width=250)
+
+                user_input = st.text_input("解答を入力してください:", key=f"practice_input_{current_idx}")
+
+                col_sub1, col_sub2 = st.columns([1, 4])
+                with col_sub1:
+                    submit_btn = st.button("解答する", type="primary", key=f"practice_submit_{current_idx}")
+
+                if submit_btn:
+                    st.session_state["practice_answered"] = True
+                    if current_idx not in st.session_state["quiz_stats"]:
+                        st.session_state["quiz_stats"][current_idx] = {"total": 0, "correct": 0}
+                    st.session_state["quiz_stats"][current_idx]["total"] += 1
+
+                    is_correct = False
+                    if user_input:
+                        is_correct = check_answers_multi([user_input], correct_answers_list)
+                    
+                    if is_correct:
+                        st.session_state["quiz_stats"][current_idx]["correct"] += 1
+                        if current_idx in st.session_state["wrong_q_indices"]:
+                            st.session_state["wrong_q_indices"].remove(current_idx)
+                        st.success("🎉 正解です！お見事！")
+                    else:
+                        st.session_state["wrong_q_indices"].add(current_idx)
+                        st.error(f"❌ 残念！不正解です。正解は: 『 {' / '.join(correct_answers_list)} 』 です。")
+
+                if st.session_state.get("practice_answered", False):
+                    if st.button("次の問題へ ➡️", key=f"next_q_{current_idx}"):
+                        st.session_state["practice_current_idx"] = random.choice(target_indices)
+                        st.session_state["practice_answered"] = False
+                        st.rerun()
 
 elif selected == "本番模試":
     pass
 
 elif selected == "苦手克服":
-    # 練習モードに統合したため、直接練習モードの苦手特訓タブへ誘導または同一機能を案内
     st.title("🔥 苦手克服モード")
     st.info("「練習モード」の中に苦手克服機能が統合されました。左側のメニューから「練習モード」を選択し、「🔥 苦手・不正解集中特訓」をご利用ください。")
     if st.button("練習モードへ移動する", type="primary"):
@@ -471,7 +492,6 @@ elif selected == "データ編集":
     if df.empty:
         st.warning("編集するデータがありません。")
     else:
-        # 練習モードから「修正」ボタン経由で渡されたインデックスがあるかチェック
         target_idx = st.session_state.get("edit_target_index", 0)
         if target_idx is None or target_idx >= len(df):
             target_idx = 0
@@ -484,7 +504,6 @@ elif selected == "データ編集":
             step=1
         )
         
-        # 選択されたらステートをリセット
         st.session_state["edit_target_index"] = None
 
         st.markdown(f"--- \n### 📝 インデックス [{selected_row_idx}] の編集")
