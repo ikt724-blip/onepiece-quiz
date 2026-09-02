@@ -42,6 +42,21 @@ def load_all_data():
 
 df_all, character_master_df = load_all_data()
 
+# 文字列型に統一して安全にするクリーニング関数
+def clean_dataframe_strings(df):
+    if df.empty:
+        return df
+    df = df.copy()
+    for col in df.columns:
+        # 重複列や不正なシリーズが含まれないようにする
+        if isinstance(df[col], pd.DataFrame):
+            df[col] = df[col].iloc[:, 0]
+        df[col] = df[col].apply(lambda x: "" if pd.isna(x) else str(x))
+    return df
+
+character_master_df = clean_dataframe_strings(character_master_df)
+df_all = clean_dataframe_strings(df_all)
+
 # 必須の追加項目がExcel側にない場合でも自動で列を追加しておく
 required_char_cols = ["birthday", "birthplace", "affiliation", "weapon", "age", "bounty", "height"]
 for col in required_char_cols:
@@ -58,6 +73,9 @@ else:
     for col in required_char_cols:
         if col not in st.session_state["char_working_df"].columns:
             st.session_state["char_working_df"][col] = ""
+
+# セッション側のデータも文字列として安全に保持させる
+st.session_state["char_working_df"] = clean_dataframe_strings(st.session_state["char_working_df"])
 
 if "wrong_q_indices" not in st.session_state:
     st.session_state["wrong_q_indices"] = set()
@@ -744,7 +762,7 @@ elif selected == "キャラ名鑑":
                         with target_col:
                             if col == "characterid":
                                 st.text_input(f"【{col} (変更不可)】", value=str(row.get(col, "")), disabled=True)
-                                edited_char_data[col] = row.get(col, "")
+                                edited_char_data[col] = str(row.get(col, ""))
                             else:
                                 val = row.get(col, "")
                                 val_str = "" if pd.isna(val) else str(val)
@@ -754,8 +772,7 @@ elif selected == "キャラ名鑑":
                     save_clicked = st.form_submit_button("💾 変更を保存する", type="primary", use_container_width=True)
 
                     if save_clicked:
-                        # 確実にPandasの行としてオブジェクト判定に巻き込まれないよう loc を利用して個別に代入
                         for col, new_val in edited_char_data.items():
-                            st.session_state["char_working_df"].loc[orig_row_id, col] = new_val
+                            st.session_state["char_working_df"].at[orig_row_id, col] = str(new_val)
                         st.success(f"「{c_name}」のデータを更新しました！")
                         st.rerun()
