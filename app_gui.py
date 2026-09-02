@@ -617,13 +617,13 @@ elif selected == "データ編集":
 
 elif selected == "キャラ名鑑":
     st.title("🏴‍☠️ キャラクター名鑑")
-    st.caption("検索またはプルダウンから選択して、キャラクターの登録詳細データの確認・その場での編集ができます。")
+    st.caption("検索またはプルダウンから選択して、キャラクター情報の確認と下部の表からのデータ編集ができます。")
     st.markdown("---")
 
     if char_data.empty:
         st.info("キャラクターマスター（character_master.xlsx）のデータが見つかりません。")
     else:
-        # 上部に配置された検索欄
+        # 上部：キャラクター名検索欄
         search_keyword = st.text_input("🔍 キャラクター名検索欄", placeholder="名前、異名、悪魔の実などで検索...")
 
         c_df = char_data.copy()
@@ -641,7 +641,7 @@ elif selected == "キャラ名鑑":
                 return get_clean_str(row.get("name")) or f"ID: {row.get('characterid')}"
 
             char_options = list(c_df.iterrows())
-            # 検索欄のすぐ下に配置されたプルダウン
+            # 検索欄のすぐ下：キャラクター名プルダウン
             selected_char_tuple = st.selectbox(
                 "キャラクター名プルダウン",
                 options=char_options,
@@ -679,11 +679,7 @@ elif selected == "キャラ名鑑":
 
                 st.markdown("---")
                 
-                edit_state_key = f"editing_char_{orig_row_id}"
-                if edit_state_key not in st.session_state:
-                    st.session_state[edit_state_key] = False
-
-                # ご提示いただいたレイアウト：左に画像、右に詳細情報（枠付き）
+                # --- 【選択されたキャラクターの表示枠】 ---
                 with st.container(border=True):
                     col_img, col_info = st.columns([1, 2])
 
@@ -694,59 +690,51 @@ elif selected == "キャラ名鑑":
                             st.info("🖼️ 画像なし")
 
                     with col_info:
-                        if not st.session_state[edit_state_key]:
-                            # --- 【表示モード】 ---
-                            info_lines = []
-                            if c_name:
-                                info_lines.append(f"- **キャラクター名:** {c_name}")
-                            if c_birth:
-                                info_lines.append(f"- **誕生日:** {c_birth}")
-                            if c_birth_place:
-                                info_lines.append(f"- **出身:** {c_birth_place}")
-                            if c_aff:
-                                info_lines.append(f"- **所属／役職:** {c_aff}")
-                            
-                            # 能力者である場合のみ悪魔の実を表示
-                            if c_fruit:
-                                fruit_display = f"{c_fruit} ({c_fruit_type})" if c_fruit_type else c_fruit
-                                info_lines.append(f"- **悪魔の実:** {fruit_display}")
-                            
-                            # 武器を使用している場合のみ使用武器を表示
-                            if c_weapon:
-                                info_lines.append(f"- **使用武器:** {c_weapon}")
+                        info_lines = []
+                        if c_name:
+                            info_lines.append(f"- **キャラクター名:** {c_name}")
+                        if c_birth:
+                            info_lines.append(f"- **誕生日:** {c_birth}")
+                        if c_birth_place:
+                            info_lines.append(f"- **出身:** {c_birth_place}")
+                        if c_aff:
+                            info_lines.append(f"- **所属／役職:** {c_aff}")
+                        
+                        if c_fruit:
+                            fruit_display = f"{c_fruit} ({c_fruit_type})" if c_fruit_type else c_fruit
+                            info_lines.append(f"- **悪魔の実:** {fruit_display}")
+                        
+                        if c_weapon:
+                            info_lines.append(f"- **使用武器:** {c_weapon}")
 
-                            if info_lines:
-                                st.markdown("\n".join(info_lines))
+                        if info_lines:
+                            st.markdown("\n".join(info_lines))
 
-                            st.markdown("")
-                            if st.button("✏️ このデータをその場で編集する", key=f"btn_toggle_edit_{orig_row_id}", type="primary"):
-                                st.session_state[edit_state_key] = True
-                                st.rerun()
-                        else:
-                            # --- 【その場での編集モード】 ---
-                            st.markdown(f"### 🛠️ {c_name} のデータ編集")
-                            with st.form(key=f"inline_edit_form_{orig_row_id}"):
-                                edited_char_data = {}
-                                for col in char_data.columns:
-                                    if col == "characterid":
-                                        st.text_input(f"【{col} (変更不可)】", value=str(row.get(col, "")), disabled=True)
-                                        edited_char_data[col] = row.get(col, "")
-                                    else:
-                                        val = row.get(col, "")
-                                        val_str = "" if pd.isna(val) else str(val)
-                                        edited_char_data[col] = st.text_input(f"【{col}】", value=val_str)
+                st.markdown("### 🛠️ 選択中キャラクターのデータ編集用テーブル")
+                st.caption("以下の入力欄を変更し、「保存する」ボタンを押すとExcelデータが更新されます。")
 
-                                col_sub1, col_sub2 = st.columns(2)
-                                save_clicked = col_sub1.form_submit_button("💾 保存する", use_container_width=True)
-                                cancel_clicked = col_sub2.form_submit_button("❌ キャンセル", use_container_width=True)
+                # --- 【選択されたキャラクターの編集用テーブル】 ---
+                with st.form(key=f"inline_edit_table_form_{orig_row_id}"):
+                    edited_char_data = {}
+                    
+                    # カラムごとに横並び・または分かりやすくフォーム部品を配置
+                    cols_in_form = st.columns(min(len(char_data.columns), 3))
+                    for idx, col in enumerate(char_data.columns):
+                        target_col = cols_in_form[idx % len(cols_in_form)]
+                        with target_col:
+                            if col == "characterid":
+                                st.text_input(f"【{col} (変更不可)】", value=str(row.get(col, "")), disabled=True)
+                                edited_char_data[col] = row.get(col, "")
+                            else:
+                                val = row.get(col, "")
+                                val_str = "" if pd.isna(val) else str(val)
+                                edited_char_data[col] = st.text_input(f"【{col}】", value=val_str)
 
-                                if save_clicked:
-                                    for col, new_val in edited_char_data.items():
-                                        st.session_state["char_working_df"].at[orig_row_id, col] = new_val
-                                    st.session_state[edit_state_key] = False
-                                    st.success("変更を保存しました！")
-                                    st.rerun()
+                    st.markdown("")
+                    save_clicked = st.form_submit_button("💾 変更を保存する", type="primary", use_container_width=True)
 
-                                if cancel_clicked:
-                                    st.session_state[edit_state_key] = False
-                                    st.rerun()
+                    if save_clicked:
+                        for col, new_val in edited_char_data.items():
+                            st.session_state["char_working_df"].at[orig_row_id, col] = new_val
+                        st.success(f"「{c_name}」のデータを更新しました！")
+                        st.rerun()
