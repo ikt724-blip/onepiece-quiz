@@ -18,7 +18,6 @@ st.set_page_config(
 # --- 1. データ読み込み＆セッション状態管理 ---
 @st.cache_data
 def load_all_data():
-    """リポジトリ内の全Excelファイル、およびキャラ名鑑用マスターを読み込む"""
     files = glob.glob("*.xlsx")
     if not files:
         return pd.DataFrame(), pd.DataFrame()
@@ -618,7 +617,7 @@ elif selected == "データ編集":
 
 elif selected == "キャラ名鑑":
     st.title("🏴‍☠️ キャラクター名鑑")
-    st.caption("検索またはプルダウンから選択して、キャラクターの登録詳細データを確認できます。")
+    st.caption("検索またはプルダウンから選択して、キャラクターの登録詳細データの確認・その場での編集ができます。")
     st.markdown("---")
 
     if char_data.empty:
@@ -636,13 +635,10 @@ elif selected == "キャラ名鑑":
         if c_df.empty:
             st.warning("条件に一致するキャラクターが見つかりません。")
         else:
+            # プルダウンの表示をキャラクター名（例: モンキー・D・ルフィ）のみに変更
             def make_char_label(idx_row):
                 _, row = idx_row
-                orig_id = int(row["_orig_row_id"])
-                c_name = get_clean_str(row.get("name")) or f"ID: {row.get('characterid')}"
-                c_nick = get_clean_str(row.get("nickname"))
-                nick_str = f" ({c_nick})" if c_nick else ""
-                return f"{c_name}{nick_str} [No.{orig_id + 1}]"
+                return get_clean_str(row.get("name")) or f"ID: {row.get('characterid')}"
 
             char_options = list(c_df.iterrows())
             selected_char_tuple = st.selectbox(
@@ -655,13 +651,11 @@ elif selected == "キャラ名鑑":
                 _, row = selected_char_tuple
                 orig_row_id = int(row["_orig_row_id"])
                 
-                c_id = get_clean_str(row.get("characterid"))
                 c_name = get_clean_str(row.get("name"))
                 c_nick = get_clean_str(row.get("nickname"))
                 c_fruit = get_clean_str(row.get("devil_fruit"))
                 c_fruit_type = get_clean_str(row.get("fruit_type"))
                 
-                # その他の項目（もしエクセルに追加された場合にも対応できるよう動的に拾う）
                 c_birth = get_clean_str(row.get("birthday") or row.get("誕生日"))
                 c_birth_place = get_clean_str(row.get("birth_place") or row.get("出身") or row.get("出身地"))
                 c_aff = get_clean_str(row.get("affiliation") or row.get("所属") or row.get("役職"))
@@ -687,7 +681,11 @@ elif selected == "キャラ名鑑":
 
                 st.markdown("---")
                 
-                # 画像と詳細情報をカード風の枠内に表示
+                # 表示モードか編集モードかの切り替えフラグ
+                edit_state_key = f"editing_char_{orig_row_id}"
+                if edit_state_key not in st.session_state:
+                    st.session_state[edit_state_key] = False
+
                 with st.container(border=True):
                     col_img, col_info = st.columns([1, 2])
 
@@ -698,28 +696,61 @@ elif selected == "キャラ名鑑":
                             st.info("🖼️ 画像なし")
 
                     with col_info:
-                        st.markdown(f"### 🏴‍☠️ {c_name}")
-                        
-                        # 箇条書きリストを作成（空欄の項目は自動非表示）
-                        info_lines = []
-                        if c_id:
-                            info_lines.append(f"- **キャラクターID:** {c_id}")
-                        if c_nick:
-                            info_lines.append(f"- **異名:** {c_nick}")
-                        if c_birth:
-                            info_lines.append(f"- **誕生日:** {c_birth}")
-                        if c_birth_place:
-                            info_lines.append(f"- **出身:** {c_birth_place}")
-                        if c_aff:
-                            info_lines.append(f"- **所属／役職:** {c_aff}")
-                        if c_fruit:
-                            fruit_display = f"{c_fruit} ({c_fruit_type})" if c_fruit_type else c_fruit
-                            info_lines.append(f"- **悪魔の実:** {fruit_display}")
-                        if c_weapon:
-                            info_lines.append(f"- **使用武器:** {c_weapon}")
+                        if not st.session_state[edit_state_key]:
+                            # --- 【表示モード】 ---
+                            st.markdown(f"### 🏴‍☠️ {c_name}")
+                            
+                            info_lines = []
+                            if c_nick:
+                                info_lines.append(f"- **異名:** {c_nick}")
+                            if c_birth:
+                                info_lines.append(f"- **誕生日:** {c_birth}")
+                            if c_birth_place:
+                                info_lines.append(f"- **出身:** {c_birth_place}")
+                            if c_aff:
+                                info_lines.append(f"- **所属／役職:** {c_aff}")
+                            if c_fruit:
+                                fruit_display = f"{c_fruit} ({c_fruit_type})" if c_fruit_type else c_fruit
+                                info_lines.append(f"- **悪魔の実:** {fruit_display}")
+                            if c_weapon:
+                                info_lines.append(f"- **使用武器:** {c_weapon}")
 
-                        if info_lines:
-                            st.markdown("\n".join(info_lines))
+                            if info_lines:
+                                st.markdown("\n".join(info_lines))
 
-                        if c_desc:
-                            st.markdown(f"\n**【詳細・解説】**\n{c_desc}")
+                            if c_desc:
+                                st.markdown(f"\n**【詳細・解説】**\n{c_desc}")
+
+                            st.markdown("")
+                            if st.button("✏️ このデータをその場で編集する", key=f"btn_toggle_edit_{orig_row_id}", type="primary"):
+                                st.session_state[edit_state_key] = True
+                                st.rerun()
+                        else:
+                            # --- 【その場での編集モード】 ---
+                            st.markdown(f"### 🛠️ {c_name} のデータ編集")
+                            with st.form(key=f"inline_edit_form_{orig_row_id}"):
+                                edited_char_data = {}
+                                for col in char_data.columns:
+                                    # IDは原則変更不可として固定表示にするか、そのまま編集可能にするか（ここでは非表示項目以外をテキスト入力に）
+                                    if col == "characterid":
+                                        st.text_input(f"【{col} (変更不可)】", value=str(row.get(col, "")), disabled=True)
+                                        edited_char_data[col] = row.get(col, "")
+                                    else:
+                                        val = row.get(col, "")
+                                        val_str = "" if pd.isna(val) else str(val)
+                                        edited_char_data[col] = st.text_input(f"【{col}】", value=val_str)
+
+                                col_sub1, col_sub2 = st.columns(2)
+                                save_clicked = col_sub1.form_submit_button("💾 保存する", use_container_width=True)
+                                cancel_clicked = col_sub2.form_submit_button("❌ キャンセル", use_container_width=True)
+
+                                if save_clicked:
+                                    for col, new_val in edited_char_data.items():
+                                        st.session_state["char_working_df"].at[orig_row_id, col] = new_val
+                                    st.session_state[edit_state_key] = False
+                                    st.success("変更を保存しました！")
+                                    st.rerun()
+
+                                if cancel_clicked:
+                                    st.session_state[edit_state_key] = False
+                                    st.rerun()
