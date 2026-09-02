@@ -318,7 +318,6 @@ elif selected == "練習モード":
     if df.empty:
         st.warning("問題データが読み込まれていません。「データ編集」タブからデータを準備してください。")
     else:
-        # 練習セッションが未開始の場合は「モード選択・円グラフ画面」を表示
         if not st.session_state["practice_active"]:
             stats = st.session_state.get("quiz_stats", {})
             wrong_set = st.session_state.get("wrong_q_indices", set())
@@ -399,7 +398,6 @@ elif selected == "練習モード":
                     st.rerun()
 
         else:
-            # --- 練習セッション開始後の「問題解答画面」 ---
             target_indices = st.session_state.get("practice_targets", list(range(len(df))))
             mode_name = st.session_state.get("practice_mode_sel", "ランダム出題")
 
@@ -434,6 +432,7 @@ elif selected == "練習モード":
                 with col_q_title:
                     st.subheader(q_text)
                 with col_edit_btn:
+                    # 修正ボタン：インデックスをセットし、ナビゲーションも「データ編集」に切り替えて即座にジャンプ
                     if st.button("✏️ この問題を修正", key=f"edit_jump_{current_idx}", help="データ編集モードを開いてこの問題を修正します"):
                         st.session_state["edit_target_index"] = current_idx
                         st.session_state["current_nav"] = "データ編集"
@@ -441,30 +440,29 @@ elif selected == "練習モード":
 
                 display_question_image(row, width=250)
 
-                user_input = st.text_input("解答を入力してください:", key=f"practice_input_{current_idx}")
+                # --- エンターキーでの解答（st.formの活用） ---
+                with st.form(key=f"quiz_form_{current_idx}"):
+                    user_input = st.text_input("解答を入力してください（Enterキーで解答）:", key=f"practice_input_{current_idx}")
+                    submit_btn = st.form_submit_button("解答する", type="primary")
 
-                col_sub1, col_sub2 = st.columns([1, 4])
-                with col_sub1:
-                    submit_btn = st.button("解答する", type="primary", key=f"practice_submit_{current_idx}")
+                    if submit_btn:
+                        st.session_state["practice_answered"] = True
+                        if current_idx not in st.session_state["quiz_stats"]:
+                            st.session_state["quiz_stats"][current_idx] = {"total": 0, "correct": 0}
+                        st.session_state["quiz_stats"][current_idx]["total"] += 1
 
-                if submit_btn:
-                    st.session_state["practice_answered"] = True
-                    if current_idx not in st.session_state["quiz_stats"]:
-                        st.session_state["quiz_stats"][current_idx] = {"total": 0, "correct": 0}
-                    st.session_state["quiz_stats"][current_idx]["total"] += 1
-
-                    is_correct = False
-                    if user_input:
-                        is_correct = check_answers_multi([user_input], correct_answers_list)
-                    
-                    if is_correct:
-                        st.session_state["quiz_stats"][current_idx]["correct"] += 1
-                        if current_idx in st.session_state["wrong_q_indices"]:
-                            st.session_state["wrong_q_indices"].remove(current_idx)
-                        st.success("🎉 正解です！お見事！")
-                    else:
-                        st.session_state["wrong_q_indices"].add(current_idx)
-                        st.error(f"❌ 残念！不正解です。正解は: 『 {' / '.join(correct_answers_list)} 』 です。")
+                        is_correct = False
+                        if user_input:
+                            is_correct = check_answers_multi([user_input], correct_answers_list)
+                        
+                        if is_correct:
+                            st.session_state["quiz_stats"][current_idx]["correct"] += 1
+                            if current_idx in st.session_state["wrong_q_indices"]:
+                                st.session_state["wrong_q_indices"].remove(current_idx)
+                            st.success("🎉 正解です！お見事！")
+                        else:
+                            st.session_state["wrong_q_indices"].add(current_idx)
+                            st.error(f"❌ 残念！不正解です。正解は: 『 {' / '.join(correct_answers_list)} 』 です。")
 
                 if st.session_state.get("practice_answered", False):
                     if st.button("次の問題へ ➡️", key=f"next_q_{current_idx}"):
